@@ -12,6 +12,85 @@ sys.path.insert(0, str(PROJECT_ROOT))
 load_dotenv(PROJECT_ROOT / ".env")
 
 
+# Prints a row count for a SQL view/table and keeps running if verification fails.
+def verify_row_count(engine, object_name):
+    try:
+        with engine.connect() as conn:
+            row_count = conn.execute(text(f"SELECT COUNT(*) FROM {object_name}")).scalar()
+
+        print(f"{object_name} rows: {row_count}")
+    except Exception as error:
+        print(f"WARNING: Could not verify {object_name}: {error}")
+
+
+# Prints the pandas shape for a SQL view and keeps running if verification fails.
+def verify_view_shape(engine, object_name):
+    try:
+        df = pd.read_sql(text(f"SELECT * FROM {object_name}"), engine)
+        print(f"{object_name} shape: {df.shape}")
+    except Exception as error:
+        print(f"WARNING: Could not verify {object_name}: {error}")
+
+
+# Prints mature style-form row count for clustering and keeps running if verification fails.
+def verify_style_mature_rows(engine):
+    object_name = "team_style_form rows with style_matches_last5 >= 3"
+
+    try:
+        with engine.connect() as conn:
+            row_count = conn.execute(
+                text(
+                    """
+                    SELECT COUNT(*)
+                    FROM team_style_form
+                    WHERE style_matches_last5 >= 3
+                    """
+                )
+            ).scalar()
+
+        print(f"{object_name}: {row_count}")
+    except Exception as error:
+        print(f"WARNING: Could not verify {object_name}: {error}")
+
+
+# Prints missing style cluster counts from match_features and keeps running if verification fails.
+def verify_match_style_missing_rows(engine):
+    checks = {
+        "home_style_cluster missing rows": """
+            SELECT COUNT(*)
+            FROM match_features
+            WHERE home_style_cluster = -1
+        """,
+        "away_style_cluster missing rows": """
+            SELECT COUNT(*)
+            FROM match_features
+            WHERE away_style_cluster = -1
+        """,
+    }
+
+    for object_name, query in checks.items():
+        try:
+            with engine.connect() as conn:
+                row_count = conn.execute(text(query)).scalar()
+
+            print(f"{object_name}: {row_count}")
+        except Exception as error:
+            print(f"WARNING: Could not verify {object_name}: {error}")
+
+
+# Verifies the feature views that should exist after sql/feature_queries.sql runs.
+def verify_feature_outputs(engine):
+    verify_row_count(engine, "team_xg_stats")
+    verify_row_count(engine, "team_tactical_match_stats")
+    verify_row_count(engine, "team_style_form")
+    verify_style_mature_rows(engine)
+    verify_row_count(engine, "home_xg_form")
+    verify_row_count(engine, "away_xg_form")
+    verify_view_shape(engine, "match_features")
+    verify_match_style_missing_rows(engine)
+    verify_view_shape(engine, "player_fpl_features")
+
+
 # Runs all SQL feature-view statements from sql/feature_queries.sql.
 def run_feature_queries(engine):
     try:
@@ -25,6 +104,15 @@ def run_feature_queries(engine):
             if not statement or len(statement) < 10:
                 continue
 
+            executable_lines = [
+                line for line in statement.splitlines()
+                if not line.strip().startswith("--")
+            ]
+            executable_statement = "\n".join(executable_lines).strip()
+
+            if not executable_statement:
+                continue
+
             with engine.connect() as conn:
                 conn.execute(text(statement))
                 conn.commit()
@@ -32,7 +120,8 @@ def run_feature_queries(engine):
             preview = statement[:60].strip().encode("ascii", "ignore").decode("ascii")
             print(f"Created: {preview}")
 
-        print("All feature views created successfully.")
+        print("Feature queries executed successfully")
+        verify_feature_outputs(engine)
     except Exception as error:
         print(f"Error running feature queries: {error}")
 

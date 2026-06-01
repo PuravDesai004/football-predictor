@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS players (
     bonus INTEGER,
     form FLOAT,
     selected_by_percent FLOAT,
-    is_available SMALLINT,
+    is_available BOOLEAN,
     status VARCHAR(10),
     news TEXT,
     influence FLOAT,
@@ -55,6 +55,7 @@ CREATE TABLE IF NOT EXISTS fixtures (
     team_h_difficulty INTEGER,
     team_a_difficulty INTEGER,
     finished BOOLEAN,
+    kickoff_time TIMESTAMP,
     team_h_score INTEGER,
     team_a_score INTEGER
 );

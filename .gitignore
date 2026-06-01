@@ -12,6 +12,18 @@ env/
 data/raw/
 data/processed/
 models/saved/*.pkl
+models/saved/*.json
+!models/saved/xgb_classifier.pkl
+!models/saved/logistic_classifier.pkl
+!models/saved/scaler.pkl
+!models/saved/label_encoder.pkl
+!models/saved/xgb_home_goals.pkl
+!models/saved/xgb_away_goals.pkl
+!models/saved/fpl_points_xgb.pkl
+!models/saved/model_features.json
+!models/saved/fpl_points_features.json
+models/saved/style_*.pkl
+models/saved/style_*.json
 
 .streamlit/secrets.toml
 .DS_Store
