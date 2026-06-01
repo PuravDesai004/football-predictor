@@ -2,14 +2,17 @@
 
 A machine learning system for Premier League match prediction and Fantasy Premier League squad optimization.
 
-**Purav Desai** | B.Tech IT Semester 6, SCET Surat  
+**Purav Desai** | B.Tech IT Semester 6, SCET Surat
 [GitHub](https://github.com/PuravDesai004/football-predictor)
 
 ---
 
 ## Current Status
 
-The project is at **Tier 2**, running locally. It predicts Premier League match outcomes (Win/Draw/Loss + approximate scoreline), optimizes a 15-player FPL squad using a trained XGBoost points model, and refreshes player availability data before gameweek deadlines.
+**Tier 2 - running locally.** The system predicts Premier League match outcomes
+(Win/Draw/Loss + approximate scoreline), builds an optimized 15-player FPL squad
+using a trained XGBoost points model, and can refresh player availability before
+gameweek deadlines.
 
 Cloud deployment is pending Supabase migration - the current database is local PostgreSQL.
 
@@ -17,9 +20,15 @@ Cloud deployment is pending Supabase migration - the current database is local P
 
 ## Why This Project Exists
 
-Football prediction is hard for specific reasons. One season gives you 380 Premier League matches. Scores are low and variance is high. Head-to-head features leak future results when you only have a single season of data. And FPL points depend on minutes, availability, role, and fixture difficulty in ways a scoring formula can't fully capture.
+Football prediction is hard for specific, non-obvious reasons. One season gives you
+380 Premier League matches. Scores are low and variance is high. Head-to-head features
+leak future results when only a single season of data is available. FPL points depend
+on minutes, availability, role, and fixture difficulty in ways no scoring formula can
+fully replicate.
 
-The goal here was to build a realistic ML pipeline - time-safe splits, explicit leakage checks, features that actually improve held-out validation - rather than a model that looks impressive in training and fails in practice.
+The goal was a realistic ML pipeline - time-safe splits, explicit leakage checks,
+features that hold up in validation - not a model that looks good in training and
+breaks against real fixtures.
 
 ---
 
@@ -33,9 +42,11 @@ Tier 1 built the data pipeline and the core prediction system.
 
 **Core PostgreSQL tables:** `players`, `teams`, `fixtures`, `gameweeks`
 
-**SQL views:** `match_results`, `team_season_stats`, `home_form`, `away_form`, `h2h_stats`, `match_features`, `player_fpl_features`
+**SQL views:** `match_results`, `team_season_stats`, `home_form`, `away_form`,
+`h2h_stats`, `match_features`, `player_fpl_features`
 
-The match model used 12 features. H2H was intentionally excluded - with one season of data it causes leakage and inflates accuracy artificially.
+The match model trained on 12 features. H2H was intentionally excluded - with one
+season of data it causes leakage and inflates accuracy to unrealistic levels.
 
 ```
 home_form_scored        away_form_scored
@@ -46,13 +57,15 @@ strength_overall_home   strength_overall_away
 home_team_away_str      away_team_home_str
 ```
 
-Tier 1 also delivered the Streamlit app, a rule-based FPL optimizer, and a clean project structure ready for GitHub.
+Tier 1 also delivered the Streamlit app, a rule-based FPL optimizer, and the full
+project structure.
 
 ---
 
 ## Tier 2
 
-Tier 2 is the current xG + FPL XGBoost system. It added Understat expected goals data to improve match features and replaced the rule-based FPL optimizer with a proper ML model.
+Tier 2 added Understat expected goals data and replaced the rule-based FPL optimizer
+with a proper XGBoost model trained on player gameweek history.
 
 **New data source:** `https://understat.com/getLeagueData/EPL/2025/`
 
@@ -65,7 +78,9 @@ home_xg_last5    away_xg_last5
 home_xga_last5   away_xga_last5
 ```
 
-The final match model uses 16 features (12 original + 4 xG/xGA) with a complete-gameweek time split: **Train GW3-GW30 / Test GW31-GW38.** No gameweek overlap between train and test.
+The final match model uses 16 features (12 original + 4 xG/xGA) with a
+complete-gameweek time split: **Train GW3-GW30 / Test GW31-GW38.**
+No overlap between train and test.
 
 ---
 
@@ -80,20 +95,24 @@ The final match model uses 16 features (12 original + 4 xG/xGA) with a complete-
 | Logistic Regression | 16 (xG) | 0.532 |
 | XGBoost | 16 (xG) | **0.570** |
 
-Score prediction is weaker but improved after adding xG:
+Score prediction improved after adding xG but is still weak:
 
 | Target | MAE | R2 |
 |--------|-----|----|
 | Home Goals | 0.975 | -0.103 |
 | Away Goals | 0.747 | -0.025 |
 
-Scorelines are a supporting output. Win/Draw/Loss probabilities are the reliable prediction - negative R2 on the score model is expected at this data volume and improves in Tier 3 with multi-season history.
+Win/Draw/Loss probabilities are the reliable output. Scorelines are a supporting
+feature - negative R2 at this data volume is expected and improves once multi-season
+history is added in Tier 3.
 
 ---
 
 ## FPL XGBoost Model
 
-The original optimizer ran a scoring formula. It worked well enough for Tier 1, but it wasn't learning from data - it was just arithmetic. Tier 2 trained a real XGBoost regressor on player gameweek history.
+The Tier 1 optimizer scored players with a fixed formula. That had a clear ceiling -
+it wasn't learning from data, it was just arithmetic. Tier 2 trained a real XGBoost
+regressor on player gameweek history instead.
 
 **New data source:** `https://fantasy.premierleague.com/api/element-summary/{player_id}/`
 
@@ -110,17 +129,22 @@ The original optimizer ran a scoring formula. It worked well enough for Tier 1, 
 
 **Feature table:** `player_gameweek_features` - 29,747 rows, 49 columns, 27,224 mature rows.
 
-The model trains only on mature rows where a player has enough prior history for rolling features to be meaningful.
+Training uses only mature rows - players with enough prior history for rolling
+features to mean something.
 
-**Features used:** previous points, minutes, starts, rolling xG/xA, rolling ICT index (influence, creativity, threat), transfers in/out, ownership percentage, price, opponent, home/away.
+**Features used:** previous points, minutes, starts, rolling xG/xA, rolling ICT
+index (influence, creativity, threat), transfers in/out, ownership percentage,
+price, opponent, home/away.
 
 ---
 
 ## FPL Leakage Prevention
 
-Double gameweeks create a specific leakage risk: if the second fixture in a double gameweek uses stats from the first fixture of the same gameweek, the model has seen data that wouldn't exist before the deadline.
+Double gameweeks create a specific leakage risk. If the second fixture in a double
+gameweek uses stats from the first fixture of the same week, the model has seen
+information that wouldn't exist before the deadline.
 
-All rolling features here are built from previous gameweeks only.
+All rolling features are built from previous gameweeks only.
 
 **Verification output:**
 
@@ -130,7 +154,8 @@ Same-gameweek historical feature mismatch groups: 0
 FPL leakage column check passed
 ```
 
-Two fixtures in the same gameweek share identical historical features - which is the correct pre-deadline behavior.
+Two fixtures in the same gameweek share identical historical features - which is
+the correct pre-deadline behavior.
 
 ---
 
@@ -145,7 +170,8 @@ Train: GW4-GW31 / Test: GW32-GW38. No gameweek overlap.
 | Baseline (`points_avg_last5`) | 1.007 | 2.046 | 0.194 |
 | XGBoost | **0.926** | **1.859** | **0.334** |
 
-The XGBoost model beats the rolling average baseline on all three metrics. Saved to `models/saved/fpl_points_xgb.pkl`.
+The XGBoost model beats the last-5 average baseline on all three metrics.
+Saved to `models/saved/fpl_points_xgb.pkl`.
 
 ---
 
@@ -159,9 +185,12 @@ The optimizer uses PuLP linear programming to select a valid 15-player squad.
 - Budget <= 100.0
 - Available players only
 
-**Outputs:** full squad selection, starter/bench split, captain recommendation, XGBoost points prediction. Falls back to rule-based scoring if the model file is missing.
+**Outputs:** full squad selection, starter/bench split, captain recommendation,
+XGBoost points prediction. Falls back to rule-based scoring if the model file
+is missing.
 
-Sanity guards prevent selecting unavailable players or players with very low expected minutes.
+Sanity guards prevent selecting unavailable players or players with very low
+expected minutes.
 
 ---
 
@@ -169,9 +198,12 @@ Sanity guards prevent selecting unavailable players or players with very low exp
 
 The Streamlit app can pull current FPL player data without retraining anything.
 
-**Fields updated on refresh:** `chance_of_playing_this_round`, `chance_of_playing_next_round`, `status`, `price`, `form`, `selected_by_percent`
+**Fields updated on refresh:** `chance_of_playing_this_round`,
+`chance_of_playing_next_round`, `status`, `price`, `form`, `selected_by_percent`
 
-**Not updated:** fixtures, `player_gameweek_history`, `player_gameweek_features`, or saved models. The lightweight `player_fpl_features` view can be refreshed for the current app state.
+**Not updated:** fixtures, `player_gameweek_history`, `player_gameweek_features`,
+or saved models. The lightweight `player_fpl_features` view can be refreshed for
+the current app state.
 
 ---
 
@@ -179,27 +211,34 @@ The Streamlit app can pull current FPL player data without retraining anything.
 
 ### KMeans Style Clustering
 
-A tactical clustering system was built using Understat team-history features: PPDA, PPDA allowed, deep completions, deep allowed, xG, xGA, npxG, npxGA, xPts, goals scored, goals conceded. Four clusters: High Press, Direct Attack, Compact Defense, Low Control.
+A tactical clustering system was built using Understat team-history features:
+PPDA, PPDA allowed, deep completions, deep allowed, xG, xGA, npxG, npxGA, xPts,
+goals scored, goals conceded. Four clusters: High Press, Direct Attack, Compact
+Defense, Low Control.
 
-Adding style features to the match model made it worse:
+Adding the style features made the match model worse:
 
 | Model | Features | Accuracy |
 |-------|----------|----------|
 | XGBoost | 16 (xG) | 0.570 |
 | XGBoost | 20 (xG + style) | 0.506 |
 
-Style clustering is not in the final model. The code and cluster analysis are kept in `src/clustering.py` as a starting point for Tier 3 research.
+Style clustering is not in the final model. The code and cluster analysis are in
+`src/clustering.py` as a starting point for Tier 3 research.
 
 ### Position-Specific FPL Models
 
-Separate XGBoost regressors were trained per position (GK, DEF, MID, FWD) and combined at prediction time.
+Separate XGBoost regressors were trained per position (GK, DEF, MID, FWD) and
+combined at prediction time.
 
 | Model | MAE |
 |-------|-----|
 | Single XGBoost | 0.926 |
 | Position-specific combined | 0.948 |
 
-The single model performed better on the combined test metrics, so it remains the final FPL model. Position-specific code stays in `src/train_fpl_position_models.py` but is not used in production.
+The single model performed better on the combined test metrics, so it remains the
+final FPL model. Position-specific code stays in `src/train_fpl_position_models.py`
+but is not used in production.
 
 ---
 
@@ -207,9 +246,12 @@ The single model performed better on the combined test metrics, so it remains th
 
 Three pages: **Match Predictor**, **FPL Team Selector**, **About**.
 
-The app predicts win/draw/loss probabilities and a predicted score, builds an optimized FPL squad with starter/bench/captain assignments, and runs the pre-deadline player refresh. Active model type is displayed on each prediction page.
+The Match Predictor page shows win/draw/loss probabilities and a predicted scoreline
+for any two PL teams. The FPL Team Selector builds an optimized squad with
+starter/bench/captain assignments. Both pages show the active model type.
+The pre-deadline refresh is also available from the app.
 
-Running locally at `http://localhost:8501`. The UI uses native Streamlit components - no custom frontend.
+Running locally at `http://localhost:8501`. UI uses native Streamlit components.
 
 ---
 
@@ -276,8 +318,7 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
-Create a `.env` file:
-Create a local `.env` file. Do not commit it to GitHub.
+Create a local `.env` file from `.env.example`. Do not commit it to GitHub.
 
 ```
 DB_HOST=localhost
@@ -319,16 +360,20 @@ streamlit run app/streamlit_app.py     # launch app
 
 ## Deployment
 
-The code is ready for GitHub upload after final review.
+Tier 2 is already versioned on GitHub:
 
-Cloud deployment requires a hosted PostgreSQL database. Recommended path:
+- `main` contains the latest Tier 2 code
+- `tier-2-complete` preserves the Tier 2 branch
+- `v2.0` preserves the Tier 2 release snapshot
 
-1. Push Tier 2 to GitHub, tag `v2.0`, create branch `tier-2-complete`
-2. Migrate local PostgreSQL to Supabase
-3. Add `DATABASE_URL` to Streamlit Cloud secrets with `sslmode=require`
-4. Deploy via Streamlit Cloud
+Cloud deployment still requires a hosted PostgreSQL database. Recommended path:
 
-The app already handles `DATABASE_URL`, Streamlit secrets, `sslmode=require`, and falls back to `.env` for local use.
+1. Migrate local PostgreSQL to Supabase
+2. Add `DATABASE_URL` to Streamlit Cloud secrets with `sslmode=require`
+3. Deploy via Streamlit Cloud
+
+The app already handles `DATABASE_URL`, Streamlit secrets, `sslmode=require`,
+and falls back to `.env` for local use.
 
 ---
 
@@ -349,22 +394,23 @@ The app already handles `DATABASE_URL`, Streamlit secrets, `sslmode=require`, an
 
 ## Roadmap
 
-- Tier 1 = foundation
-- Tier 2 = current xG + FPL XGBoost system
-- Tier 3 = final advanced model
+- **Tier 1** - foundation (complete)
+- **Tier 2** - current xG + FPL XGBoost system (complete, local)
+- **Tier 3** - final advanced model (planned)
 
 ---
 
 ## Tier 3: Final Advanced Model
 
-Tier 3 is the final advanced model. It focuses on the data volume problem and the richer context needed for higher-quality predictions. One season of 380 matches is the main constraint - the fix is more data, not more compute.
+The main constraint right now is data volume - 380 matches from one season.
+The fix is more data, not more compute.
 
-Planned work:
+Planned additions:
 - Multi-season Premier League data
 - Elo ratings
 - Poisson scoreline probability matrix
 - Time-decay weighting for older seasons
-- H2H features reintroduced only after multi-season data is available
+- H2H features (only once multi-season data exists)
 - Weekly automated refresh pipeline
 - Multi-league data
 - Champions League context and competition-specific performance ratios
@@ -375,7 +421,8 @@ Planned work:
 - Tactical matchup features
 - Advanced FPL transfer planning
 
-The same standard applies throughout: any feature that improves training accuracy but fails time-safe cross-validation gets cut.
+The standard throughout: any feature that improves training accuracy but fails
+time-safe cross-validation gets cut.
 
 ---
 
