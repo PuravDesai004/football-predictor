@@ -9,7 +9,7 @@ A machine learning system for Premier League match prediction and Fantasy Premie
 
 ## Current Status
 
-The project is at **Tier 2.5**, running locally. It predicts Premier League match outcomes (Win/Draw/Loss + approximate scoreline), optimizes a 15-player FPL squad using a trained XGBoost points model, and refreshes player availability data before gameweek deadlines.
+The project is at **Tier 2**, running locally. It predicts Premier League match outcomes (Win/Draw/Loss + approximate scoreline), optimizes a 15-player FPL squad using a trained XGBoost points model, and refreshes player availability data before gameweek deadlines.
 
 Cloud deployment is pending Supabase migration - the current database is local PostgreSQL.
 
@@ -52,7 +52,7 @@ Tier 1 also delivered the Streamlit app, a rule-based FPL optimizer, and a clean
 
 ## Tier 2
 
-Tier 2 added Understat expected goals data to improve match features.
+Tier 2 is the current xG + FPL XGBoost system. It added Understat expected goals data to improve match features and replaced the rule-based FPL optimizer with a proper ML model.
 
 **New data source:** `https://understat.com/getLeagueData/EPL/2025/`
 
@@ -91,11 +91,9 @@ Scorelines are a supporting output. Win/Draw/Loss probabilities are the reliable
 
 ---
 
-## Tier 2.5
+## FPL XGBoost Model
 
-Tier 2.5 replaced the rule-based FPL optimizer with a proper ML model.
-
-The original optimizer ran a scoring formula. It worked well enough for Tier 1, but it wasn't learning from data - it was just arithmetic. Tier 2.5 trained a real XGBoost regressor on player gameweek history.
+The original optimizer ran a scoring formula. It worked well enough for Tier 1, but it wasn't learning from data - it was just arithmetic. Tier 2 trained a real XGBoost regressor on player gameweek history.
 
 **New data source:** `https://fantasy.premierleague.com/api/element-summary/{player_id}/`
 
@@ -325,7 +323,7 @@ The code is ready for GitHub upload after final review.
 
 Cloud deployment requires a hosted PostgreSQL database. Recommended path:
 
-1. Push Tier 2.5 to GitHub, tag `v2.5`, create branch `tier-2.5-complete`
+1. Push Tier 2 to GitHub, tag `v2.0`, create branch `tier-2-complete`
 2. Migrate local PostgreSQL to Supabase
 3. Add `DATABASE_URL` to Streamlit Cloud secrets with `sslmode=require`
 4. Deploy via Streamlit Cloud
@@ -349,9 +347,17 @@ The app already handles `DATABASE_URL`, Streamlit secrets, `sslmode=require`, an
 
 ---
 
-## Tier 3
+## Roadmap
 
-Tier 3 focuses on the data volume problem. One season of 380 matches is the main constraint - the fix is more data, not more compute.
+- Tier 1 = foundation
+- Tier 2 = current xG + FPL XGBoost system
+- Tier 3 = final advanced model
+
+---
+
+## Tier 3: Final Advanced Model
+
+Tier 3 is the final advanced model. It focuses on the data volume problem and the richer context needed for higher-quality predictions. One season of 380 matches is the main constraint - the fix is more data, not more compute.
 
 Planned work:
 - Multi-season Premier League data
@@ -360,13 +366,6 @@ Planned work:
 - Time-decay weighting for older seasons
 - H2H features reintroduced only after multi-season data is available
 - Weekly automated refresh pipeline
-
----
-
-## Tier 3.5
-
-Tier 3.5 is the research-heavy phase. Possible additions:
-
 - Multi-league data
 - Champions League context and competition-specific performance ratios
 - Team morale and news sentiment (NewsAPI + HuggingFace transformer)
