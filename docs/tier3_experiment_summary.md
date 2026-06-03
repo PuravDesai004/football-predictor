@@ -15,6 +15,7 @@ Current Tier 3 local data tables:
 - `match_features_v3_base`: 1900 rows
 - `elo_ratings_v3`: 1900 rows
 - `match_features_v3_elo`: 1900 rows
+- `match_features_v3_h2h_experiment`: 1900 rows
 
 Seasons present:
 
@@ -155,13 +156,100 @@ Decision:
 - Keep Poisson as a scoreline/probability diagnostic layer.
 - Do not feed Poisson outputs into XGBoost yet.
 
-## Current Best Development Models
+## Phase 5A: H2H Feature Engineering
 
-The best overall development classifier so far is `logistic_elo` by accuracy, log loss, and Brier score.
+Phase 5A added `match_features_v3_h2h_experiment` as a local experiment table with 1900 rows.
 
-The best XGBoost candidate is `xgb_elo`.
+The H2H feature builder uses leakage-safe prior-only logic. For each fixture, only previous meetings before that match date are eligible. The table includes feature rows for `2025-26`, but those rows were not used for development model selection.
 
-Poisson is useful for scoreline diagnostics, not as the final W/D/L classifier. No final test has been run.
+Key table result:
+
+- `match_features_v3_h2h_experiment`: 1900 rows
+- Development seasons available for experiments: `2021-22` through `2024-25`
+- Reserved final holdout still untouched for model metrics: `2025-26`
+
+## Phase 5B: H2H Model Experiment
+
+The H2H model experiment used 1520 development rows only.
+
+H2H evidence threshold:
+
+- Rows thresholded because `h2h_matches_prior < 3`: 807
+- Rows with usable H2H after thresholding: 713
+
+Result:
+
+- H2H improved some draw behavior.
+- H2H worsened log loss materially.
+- Verdict: reject / keep experimental.
+
+H2H is not promoted into the core Tier 3 feature set.
+
+## Phase 6A: Calibration and Draw-Rule Experiment
+
+Phase 6A tested time-safe fit/calibrate/validate folds:
+
+- Fold 1:
+  - Fit: `2021-22`
+  - Calibrate: `2022-23`
+  - Validate: `2023-24`
+- Fold 2:
+  - Fit: `2021-22`, `2022-23`
+  - Calibrate: `2023-24`
+  - Validate: `2024-25`
+
+The initial calibration setup looked promising within its smaller fit/calibrate/validate design, especially on probability metrics. The logistic draw rule became an experimental hard-label candidate. The XGBoost draw rule was rejected.
+
+No `2025-26` rows were loaded, tuned, calibrated, or evaluated for model metrics.
+
+## Phase 6B: Development Model-Selection Audit
+
+Phase 6B compared the original expanding-window Elo models against the time-safe calibrated models in one repeatable leaderboard.
+
+Final development leaderboard:
+
+| Model | Accuracy | Log loss | Brier | Draw F1 |
+| --- | ---: | ---: | ---: | ---: |
+| `logistic_elo_expanding` | .5579 | .9705 | .5730 | .0893 |
+| `logistic_elo_calibrated_draw_rule` | .5395 | .9732 | .5773 | .1910 |
+| `logistic_elo_calibrated` | .5382 | .9732 | .5773 | .0424 |
+| `logistic_base_expanding` | .5474 | .9890 | .5875 | .1193 |
+| `xgb_elo_expanding` | .5382 | .9984 | .5901 | .1118 |
+| `xgb_elo_calibrated` | .5368 | 1.0035 | .5966 | .0503 |
+| `xgb_elo_calibrated_draw_rule` | .5132 | 1.0035 | .5966 | .0845 |
+| `xgb_base_expanding` | .5237 | 1.0176 | .6052 | .0895 |
+
+Model-selection audit result:
+
+- Current development probability champion: `logistic_elo_expanding`
+- Calibration is not promoted because it did not beat expanding `logistic_elo` on the promotion gate.
+- Logistic draw rule remains an experimental hard-label helper only.
+- XGBoost draw rule is not promoted.
+
+## Current Model Decision
+
+Current development probability champion:
+
+- `logistic_elo_expanding`
+
+Current status:
+
+- Elo remains a core candidate feature group.
+- The draw rule remains an experimental hard-label helper only.
+- No final model has been frozen.
+- No final `2025-26` holdout evaluation has been run.
+- `2025-26` remains the untouched final holdout.
+
+## Active Rejection List
+
+Not promoted:
+
+- H2H
+- Calibration
+- XGBoost draw rule
+- Poisson for W/D/L classification
+
+Poisson remains useful as a scoreline/probability diagnostic pathway, not as the promoted W/D/L model.
 
 ## Feature Decisions So Far
 
@@ -171,18 +259,23 @@ Accepted or candidate:
 - Rolling form/xG baseline features
 - Elo as a candidate feature group
 
-Not accepted as the main W/D/L model:
+Experimental only:
 
-- Poisson hard-class W/D/L
+- Logistic draw rule as a hard-label helper
+- Poisson scoreline diagnostics
+
+Not accepted as core W/D/L model inputs:
+
+- H2H
+- Poisson outputs
+- Betting odds
 
 Deferred:
 
-- H2H retest
-- Style/tactical retest
+- Style/tactical features
 - Manager features
 - Sentiment/morale
 - Injuries/team availability
-- Betting odds
 - FPL multi-gameweek planning
 - Deployment/Supabase/private backend
 
@@ -191,14 +284,14 @@ Deferred:
 - No random split
 - `2025-26` untouched
 - No post-match Elo columns
-- No H2H until safe retest
+- No final holdout metrics before model freeze
 - No current FPL strength/FDR in historical model
 - All imputation/scaling inside training folds only
 - No feature accepted without walk-forward validation
 
-## Next Recommended Steps
+## Next Recommended Phases
 
-1. Review/commit current stable Tier 3 local foundation.
-2. Phase 5A: H2H retest only using prior meetings across multi-season data.
-3. Or Phase 5A alternative: model calibration / draw handling before H2H.
-4. Final `2025-26` test only after model choice is frozen.
+1. Phase 7A: source audit for style/tactical features before building anything.
+2. Phase 7B only if source quality is valid: build a time-safe style/tactical experiment.
+3. Manager, sentiment, and injury features remain experimental unless reliable dated sources exist.
+4. Deployment comes only after final model freeze.
