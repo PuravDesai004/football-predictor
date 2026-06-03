@@ -11,6 +11,8 @@ env/
 
 data/raw/
 data/processed/
+data/historical/*.csv
+!data/historical/.gitkeep
 models/saved/*.pkl
 models/saved/*.json
 !models/saved/xgb_classifier.pkl
