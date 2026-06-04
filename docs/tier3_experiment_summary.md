@@ -16,6 +16,9 @@ Current Tier 3 local data tables:
 - `elo_ratings_v3`: 1900 rows
 - `match_features_v3_elo`: 1900 rows
 - `match_features_v3_h2h_experiment`: 1900 rows
+- `match_features_v3_style_experiment`: 1900 rows
+- `standings_before_match_v3`: 3800 rows
+- `match_features_v3_pressure_experiment`: 1900 rows
 
 Seasons present:
 
@@ -226,16 +229,109 @@ Model-selection audit result:
 - Logistic draw rule remains an experimental hard-label helper only.
 - XGBoost draw rule is not promoted.
 
+## Phase 7: Style/Tactical Source Audit and Experiment
+
+Phase 7A inspected local tactical/style sources before feature building. The audit recommendation allowed only a narrow Understat xG/xGA style-proxy experiment from `historical_understat_xg`. It rejected direct use of PPDA, deep completions, style clusters, FPL strength/FDR, final-season averages, current/final table positions, manually labeled style, and same-match post-match stats.
+
+Phase 7B created the local experiment table:
+
+- `match_features_v3_style_experiment`: 1900 rows
+
+The style builder used prior-match xG/xGA only and the leakage audit passed. The `2025-26` rows exist in the table for future holdout use, but they were not used for model selection or reported model metrics.
+
+Phase 7C development results:
+
+| Model | Accuracy | Log loss | Brier | Draw F1 |
+| --- | ---: | ---: | ---: | ---: |
+| `logistic_elo` | .5579 | .9705 | .5730 | .0893 |
+| `logistic_elo_style` | .5474 | 1.0091 | .5945 | .1526 |
+| `xgb_elo` | .5382 | .9984 | .5901 | .1118 |
+| `xgb_elo_style` | .5237 | 1.0143 | .5991 | .1263 |
+
+Verdict:
+
+- `REJECT_STYLE_EXPERIMENT`
+
+Reasons:
+
+- Draw F1 improved, but log loss and Brier worsened too much.
+- Four style features had exact `1.0000` correlation with existing rolling xG/xGA features.
+- Style remains rejected / experimental archive, not a promoted core W/D/L model input.
+
+## Phase 8: Match Pressure Experiment
+
+Phase 8A created pre-match standings and pressure experiment tables:
+
+- `standings_before_match_v3`: 3800 rows
+- `match_features_v3_pressure_experiment`: 1900 rows
+
+Pressure was built only from pre-match standings. No final table, final rank, future match, same-match result, same-date result, derby, or rivalry feature was used.
+
+Pressure coverage in development rows:
+
+- Both pressure indexes non-null: 1198
+- Only one pressure index non-null: 4
+- Both pressure indexes null: 318
+
+Phase 8B development results:
+
+| Model | Accuracy | Log loss | Brier | Draw F1 |
+| --- | ---: | ---: | ---: | ---: |
+| `logistic_elo` | .5579 | .9705 | .5730 | .0893 |
+| `logistic_elo_pressure` | .5447 | 1.0024 | .5904 | .1643 |
+| `xgb_elo` | .5382 | .9984 | .5901 | .1118 |
+| `xgb_elo_pressure` | .5329 | .9918 | .5890 | .1387 |
+
+Verdict:
+
+- `REJECT_PRESSURE_EXPERIMENT`
+
+Reasons:
+
+- `logistic_elo_pressure` worsened log loss by +0.0319 and Brier by +0.0174.
+- Pressure improved draw F1 but hurt probability quality.
+- XGB pressure improved XGB log loss slightly, but did not beat the logistic champion and did not improve both folds.
+- Pressure remains rejected / experimental archive, not a promoted core W/D/L model input.
+
+## Current Tier 3 Decision List
+
+- Elo: core candidate
+- `logistic_elo_expanding`: current development probability champion
+- Logistic draw rule: experimental hard-label helper only
+- H2H: rejected / experimental archive
+- Style: rejected / experimental archive
+- Pressure: rejected / experimental archive
+- Calibration: not promoted
+- XGB calibration/draw rule: not promoted
+- Poisson: diagnostic only
+- Rivalry/derby: rejected for Tier 3
+
+## Pattern Noticed
+
+H2H, style, and pressure all improved draw behavior in some way. All hurt or failed to improve probability quality enough.
+
+Therefore the main probability model should remain `logistic_elo_expanding`.
+
 ## Current Model Decision
 
 Current development probability champion:
 
 - `logistic_elo_expanding`
 
+Development champion metrics:
+
+- accuracy: 0.5579
+- log_loss: 0.9705
+- Brier: 0.5730
+- draw F1: 0.0893
+
 Current status:
 
 - Elo remains a core candidate feature group.
 - The draw rule remains an experimental hard-label helper only.
+- H2H, style, and pressure are rejected / experimental archive.
+- Poisson remains diagnostic only.
+- Calibration is not promoted.
 - No final model has been frozen.
 - No final `2025-26` holdout evaluation has been run.
 - `2025-26` remains the untouched final holdout.
@@ -245,9 +341,12 @@ Current status:
 Not promoted:
 
 - H2H
+- Style
+- Pressure
 - Calibration
 - XGBoost draw rule
 - Poisson for W/D/L classification
+- Rivalry/derby
 
 Poisson remains useful as a scoreline/probability diagnostic pathway, not as the promoted W/D/L model.
 
@@ -267,12 +366,14 @@ Experimental only:
 Not accepted as core W/D/L model inputs:
 
 - H2H
+- Style
+- Pressure
 - Poisson outputs
 - Betting odds
+- Rivalry/derby
 
 Deferred:
 
-- Style/tactical features
 - Manager features
 - Sentiment/morale
 - Injuries/team availability
@@ -291,7 +392,7 @@ Deferred:
 
 ## Next Recommended Phases
 
-1. Phase 7A: source audit for style/tactical features before building anything.
-2. Phase 7B only if source quality is valid: build a time-safe style/tactical experiment.
+1. Keep `logistic_elo_expanding` as the current development probability champion.
+2. Preserve H2H, style, and pressure as rejected / experimental archive work so the same failed experiments are not repeated.
 3. Manager, sentiment, and injury features remain experimental unless reliable dated sources exist.
 4. Deployment comes only after final model freeze.
