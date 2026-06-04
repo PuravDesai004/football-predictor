@@ -2,9 +2,9 @@
 
 ## Status
 
-Tier 3 is in local development. The results below are development validation results, not final test results.
+Tier 3 is in local development. The results below include development validation results and the official final `2025-26` holdout result recorded after the Phase 10A freeze audit.
 
-The `2025-26` season is reserved as the final untouched test season. It has not been evaluated for model selection or reporting. No deployment is complete yet.
+The `2025-26` season was reserved as the final untouched test season and was evaluated once after the final candidate freeze. It was not used for model selection, feature tuning, hyperparameter tuning, or threshold tuning. No deployment is complete yet.
 
 ## Data Foundation
 
@@ -54,7 +54,7 @@ Walk-forward folds:
   - Train: `2021-22`, `2022-23`, `2023-24`
   - Validate: `2024-25`
 
-The `2025-26` season has not been evaluated.
+The `2025-26` season was excluded from walk-forward model selection and evaluated only after the final candidate freeze.
 
 ## Phase Results
 
@@ -381,16 +381,92 @@ Rejected or excluded feature families:
 - Poisson: diagnostic only
 - Betting odds, manager, sentiment, injury, rivalry, and derby: rejected for Tier 3
 
-The final `2025-26` holdout remains untouched. No final `2025-26` holdout evaluation has been run.
+At the time of the Phase 10A checkpoint, the final `2025-26` holdout remained untouched. No final `2025-26` holdout evaluation had been run.
 
 Next phase:
 
 - Final holdout evaluation only after the Phase 10A freeze audit passes.
 
+## Phase 10C: Official Final 2025-26 Holdout Evaluation
+
+Phase 10C records the official final holdout result exactly as observed after the Phase 10A freeze audit. No tuning, competing final models, feature changes, hyperparameter changes, draw overlay threshold changes, or alternate model-selection experiments were run after seeing the final holdout.
+
+Setup:
+
+- Official final probability model: `logistic_elo_expanding`
+- Training seasons: `2021-22`, `2022-23`, `2023-24`, `2024-25`
+- Training rows: 1520
+- Holdout season: `2025-26`
+- Holdout rows: 380
+- Source table: `match_features_v3_elo`
+- Feature count: 32
+- Selected draw threshold from training only: 0.24
+- No tuning on `2025-26`
+
+Actual holdout distribution:
+
+| Result | Count |
+| --- | ---: |
+| H | 162 |
+| D | 104 |
+| A | 114 |
+
+Argmax final holdout metrics:
+
+| Metric | Value |
+| --- | ---: |
+| accuracy | 0.4868 |
+| log_loss | 1.0601 |
+| Brier | 0.6372 |
+| draw recall | 0.0000 |
+| draw precision | 0.0000 |
+| draw F1 | 0.0000 |
+
+Argmax predicted distribution:
+
+| Prediction | Count |
+| --- | ---: |
+| H | 250 |
+| D | 1 |
+| A | 129 |
+
+Draw overlay final holdout metrics:
+
+| Metric | Value |
+| --- | ---: |
+| accuracy | 0.4684 |
+| log_loss | 1.0601 |
+| Brier | 0.6372 |
+| draw recall | 0.0769 |
+| draw precision | 0.2353 |
+| draw F1 | 0.1159 |
+
+Draw overlay predicted distribution:
+
+| Prediction | Count |
+| --- | ---: |
+| H | 229 |
+| D | 34 |
+| A | 117 |
+
+Draw overlay checks:
+
+- Labels changed to draw: 33
+- Probability metrics unchanged assertion: passed
+
+Interpretation:
+
+- Final holdout performance is weaker than development validation.
+- The largest weakness is draw prediction.
+- The draw overlay improved draw F1 but reduced final holdout accuracy.
+- The draw overlay must not be presented as improving the final probability model.
+- The draw overlay may be documented only as an optional draw-risk helper, not as the default final prediction rule.
+- Do not tune after the final holdout.
+
 ## Current Tier 3 Decision List
 
 - Elo: core candidate
-- `logistic_elo_expanding`: current probability champion
+- `logistic_elo_expanding`: official final probability model
 - Draw overlay: accepted experimental serving helper
 - H2H: rejected / experimental archive
 - Style: rejected / experimental archive
@@ -422,14 +498,15 @@ Development champion metrics:
 Current status:
 
 - Elo remains a core candidate feature group.
-- The draw overlay is accepted as an experimental hard-label serving helper only.
+- The official final probability model is `logistic_elo_expanding`.
+- The draw overlay is documented as an optional draw-risk helper only.
 - The probability model remains `logistic_elo_expanding`; probabilities are unchanged by the overlay.
 - H2H, style, and pressure are rejected / experimental archive.
 - Poisson remains diagnostic only.
 - Calibration is not promoted.
-- No final model has been frozen.
-- No final `2025-26` holdout evaluation has been run.
-- `2025-26` remains the untouched final holdout.
+- The final model candidate was frozen before final holdout evaluation.
+- The final `2025-26` holdout evaluation has been recorded.
+- No tuning should occur after the final holdout result.
 
 ## Active Rejection List
 
@@ -478,17 +555,18 @@ Deferred:
 ## Leakage Rules Still Active
 
 - No random split
-- `2025-26` untouched
+- `2025-26` excluded from model selection and evaluated only after freeze
 - No post-match Elo columns
 - No final holdout metrics before model freeze
+- No tuning after final holdout evaluation
 - No current FPL strength/FDR in historical model
 - All imputation/scaling inside training folds only
 - No feature accepted without walk-forward validation
 
 ## Next Recommended Phases
 
-1. Keep `logistic_elo_expanding` as the current development probability champion.
-2. Carry the draw overlay into final holdout evaluation as a separate hard-label metric line, without changing probabilities.
+1. Keep `logistic_elo_expanding` as the official final probability model.
+2. Document the draw overlay only as an optional draw-risk helper, without changing probabilities.
 3. Preserve H2H, style, and pressure as rejected / experimental archive work so the same failed experiments are not repeated.
 4. Manager, sentiment, and injury features remain experimental unless reliable dated sources exist.
-5. Deployment comes only after final model freeze.
+5. Deployment comes only after the final holdout result is documented and accepted without post-holdout tuning.
