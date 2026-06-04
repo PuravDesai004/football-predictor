@@ -358,6 +358,35 @@ Clarification:
 - It must not alter probabilities.
 - It should be included in final holdout evaluation as a separate hard-label metric line.
 
+## Phase 10A: Final Model Freeze Audit
+
+Phase 10A freezes the final Tier 3 candidate definition before any final holdout evaluation.
+
+Final candidate definition:
+
+- Probability model: `logistic_elo_expanding`
+- Source table: `match_features_v3_elo`
+- Allowed feature family: base + Elo features only
+- Serving helper: draw overlay hard-label rule only
+- Overlay status: accepted experimental serving helper
+- Overlay probability behavior: probabilities must not be altered
+
+Rejected or excluded feature families:
+
+- H2H: rejected / experimental archive
+- Style: rejected / experimental archive
+- Pressure: rejected / experimental archive
+- Calibration variants: not promoted
+- XGB variants: not champion
+- Poisson: diagnostic only
+- Betting odds, manager, sentiment, injury, rivalry, and derby: rejected for Tier 3
+
+The final `2025-26` holdout remains untouched. No final `2025-26` holdout evaluation has been run.
+
+Next phase:
+
+- Final holdout evaluation only after the Phase 10A freeze audit passes.
+
 ## Current Tier 3 Decision List
 
 - Elo: core candidate
