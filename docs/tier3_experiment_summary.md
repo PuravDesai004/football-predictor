@@ -293,11 +293,76 @@ Reasons:
 - XGB pressure improved XGB log loss slightly, but did not beat the logistic champion and did not improve both folds.
 - Pressure remains rejected / experimental archive, not a promoted core W/D/L model input.
 
+## Phase 9: Final Hard-Label Draw Overlay
+
+Phase 9A tested one final hard-label draw overlay on top of the current probability champion, `logistic_elo_expanding`.
+
+Design:
+
+- Main model remains `logistic_elo_expanding`.
+- Overlay changes hard labels only.
+- Probabilities are not adjusted.
+- No binary draw classifier was trained.
+- No stacked model was trained.
+- No H2H, style, pressure, or Poisson inputs were used.
+- No validation tuning was used.
+- No `2025-26` rows were loaded, tuned, evaluated, or reported for model metrics.
+
+Overlay rule:
+
+- Start from the normal argmax prediction.
+- Change the hard label to draw only if:
+  - `P(D)` is above the training-derived threshold
+  - Draw is the second-highest class
+  - Dominant class probability is below `0.50`
+- Probabilities remain untouched.
+
+Thresholds:
+
+- Fold 1 threshold: `0.34`
+- Fold 2 threshold: `0.28`
+- Difference: `0.06`
+
+Threshold stability passed, but narrowly.
+
+Fold 1:
+
+| Mode | Accuracy | Log loss | Brier | Draw F1 | Changed to draw |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Argmax | .5921 | .9289 | .5436 | .1386 | 0 |
+| Overlay | .5947 | .9289 | .5436 | .2764 | 22 |
+
+Fold 2:
+
+| Mode | Accuracy | Log loss | Brier | Draw F1 | Changed to draw |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Argmax | .5237 | 1.0121 | .6024 | .0400 | 0 |
+| Overlay | .5289 | 1.0121 | .6024 | .1500 | 20 |
+
+Aggregate:
+
+| Mode | Accuracy | Log loss | Brier | Draw recall | Draw precision | Draw F1 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Argmax | .5579 | .9705 | .5730 | .0534 | .3271 | .0893 |
+| Overlay | .5618 | .9705 | .5730 | .1520 | .3740 | .2132 |
+
+Verdict:
+
+- `ACCEPT_DRAW_OVERLAY_EXPERIMENTAL_SERVING_HELPER`
+
+Clarification:
+
+- The probability champion remains `logistic_elo_expanding`.
+- The overlay is accepted only for hard-label serving.
+- It must not be described as improving probability calibration.
+- It must not alter probabilities.
+- It should be included in final holdout evaluation as a separate hard-label metric line.
+
 ## Current Tier 3 Decision List
 
 - Elo: core candidate
-- `logistic_elo_expanding`: current development probability champion
-- Logistic draw rule: experimental hard-label helper only
+- `logistic_elo_expanding`: current probability champion
+- Draw overlay: accepted experimental serving helper
 - H2H: rejected / experimental archive
 - Style: rejected / experimental archive
 - Pressure: rejected / experimental archive
@@ -328,7 +393,8 @@ Development champion metrics:
 Current status:
 
 - Elo remains a core candidate feature group.
-- The draw rule remains an experimental hard-label helper only.
+- The draw overlay is accepted as an experimental hard-label serving helper only.
+- The probability model remains `logistic_elo_expanding`; probabilities are unchanged by the overlay.
 - H2H, style, and pressure are rejected / experimental archive.
 - Poisson remains diagnostic only.
 - Calibration is not promoted.
@@ -360,7 +426,7 @@ Accepted or candidate:
 
 Experimental only:
 
-- Logistic draw rule as a hard-label helper
+- Draw overlay as a hard-label serving helper
 - Poisson scoreline diagnostics
 
 Not accepted as core W/D/L model inputs:
@@ -393,6 +459,7 @@ Deferred:
 ## Next Recommended Phases
 
 1. Keep `logistic_elo_expanding` as the current development probability champion.
-2. Preserve H2H, style, and pressure as rejected / experimental archive work so the same failed experiments are not repeated.
-3. Manager, sentiment, and injury features remain experimental unless reliable dated sources exist.
-4. Deployment comes only after final model freeze.
+2. Carry the draw overlay into final holdout evaluation as a separate hard-label metric line, without changing probabilities.
+3. Preserve H2H, style, and pressure as rejected / experimental archive work so the same failed experiments are not repeated.
+4. Manager, sentiment, and injury features remain experimental unless reliable dated sources exist.
+5. Deployment comes only after final model freeze.
