@@ -504,3 +504,86 @@ CREATE TABLE IF NOT EXISTS match_features_v3_h2h_experiment (
     CHECK (h2h_last_meeting_days IS NULL OR h2h_last_meeting_days > 0),
     CHECK (h2h_last_meeting_result IS NULL OR h2h_last_meeting_result IN ('H', 'D', 'A'))
 );
+
+CREATE TABLE IF NOT EXISTS production_ingestion_runs (
+    run_id SERIAL PRIMARY KEY,
+    run_started_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    run_finished_at TIMESTAMP NULL,
+    run_status TEXT NOT NULL,
+    run_type TEXT NOT NULL,
+    target_season TEXT NOT NULL,
+    target_gameweek INTEGER NULL,
+    deadline_time TIMESTAMP NULL,
+    fpl_bootstrap_status TEXT NULL,
+    fpl_fixtures_status TEXT NULL,
+    football_data_status TEXT NULL,
+    understat_status TEXT NULL,
+    rows_fpl_players INTEGER NOT NULL DEFAULT 0,
+    rows_fpl_fixtures INTEGER NOT NULL DEFAULT 0,
+    rows_new_results INTEGER NOT NULL DEFAULT 0,
+    rows_new_xg INTEGER NOT NULL DEFAULT 0,
+    error_message TEXT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CHECK (run_status IN ('started', 'success', 'partial', 'failed')),
+    CHECK (target_gameweek IS NULL OR target_gameweek > 0),
+    CHECK (rows_fpl_players >= 0),
+    CHECK (rows_fpl_fixtures >= 0),
+    CHECK (rows_new_results >= 0),
+    CHECK (rows_new_xg >= 0)
+);
+
+CREATE TABLE IF NOT EXISTS production_fpl_bootstrap_snapshots (
+    snapshot_id BIGSERIAL PRIMARY KEY,
+    run_id INTEGER NOT NULL REFERENCES production_ingestion_runs(run_id),
+    snapshot_time TIMESTAMP NOT NULL,
+    event_id INTEGER NULL,
+    deadline_time TIMESTAMP NULL,
+    player_id INTEGER NOT NULL,
+    player_name TEXT NOT NULL,
+    web_name TEXT NOT NULL,
+    team_id INTEGER NOT NULL,
+    team_name TEXT NULL,
+    position_id INTEGER NOT NULL,
+    now_cost INTEGER NOT NULL,
+    selected_by_percent FLOAT NULL,
+    total_points INTEGER NOT NULL,
+    form FLOAT NULL,
+    status TEXT NOT NULL,
+    chance_of_playing_next_round INTEGER NULL,
+    chance_of_playing_this_round INTEGER NULL,
+    news TEXT NULL,
+    news_added TIMESTAMP NULL,
+    raw_player_json JSONB NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS production_fpl_fixture_snapshots (
+    snapshot_id BIGSERIAL PRIMARY KEY,
+    run_id INTEGER NOT NULL REFERENCES production_ingestion_runs(run_id),
+    snapshot_time TIMESTAMP NOT NULL,
+    event_id INTEGER NULL,
+    fixture_id INTEGER NOT NULL,
+    kickoff_time TIMESTAMP NULL,
+    team_h_id INTEGER NOT NULL,
+    team_a_id INTEGER NOT NULL,
+    team_h_name TEXT NULL,
+    team_a_name TEXT NULL,
+    finished BOOLEAN NOT NULL,
+    started BOOLEAN NOT NULL,
+    finished_provisional BOOLEAN NULL,
+    team_h_score INTEGER NULL,
+    team_a_score INTEGER NULL,
+    raw_fixture_json JSONB NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS production_data_freshness (
+    source_name TEXT PRIMARY KEY,
+    last_successful_run_id INTEGER NULL REFERENCES production_ingestion_runs(run_id),
+    last_successful_update_at TIMESTAMP NULL,
+    latest_event_id INTEGER NULL,
+    latest_deadline_time TIMESTAMP NULL,
+    latest_completed_match_date DATE NULL,
+    latest_error_message TEXT NULL,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
