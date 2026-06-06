@@ -577,6 +577,48 @@ CREATE TABLE IF NOT EXISTS production_fpl_fixture_snapshots (
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS production_football_data_match_staging (
+    staging_id BIGSERIAL PRIMARY KEY,
+    run_id INTEGER NOT NULL REFERENCES production_ingestion_runs(run_id),
+    source_name TEXT NOT NULL,
+    target_season TEXT NOT NULL,
+    source_url TEXT NOT NULL,
+    source_file_name TEXT NOT NULL,
+    match_date DATE NOT NULL,
+    home_team TEXT NOT NULL,
+    away_team TEXT NOT NULL,
+    home_goals INTEGER NOT NULL,
+    away_goals INTEGER NOT NULL,
+    result TEXT NOT NULL,
+    raw_row_json JSONB NOT NULL,
+    validation_status TEXT NOT NULL,
+    validation_error TEXT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CHECK (home_team <> away_team),
+    CHECK (home_goals >= 0),
+    CHECK (away_goals >= 0),
+    CHECK (result IN ('H', 'D', 'A'))
+);
+
+CREATE TABLE IF NOT EXISTS production_understat_xg_staging (
+    staging_id BIGSERIAL PRIMARY KEY,
+    run_id INTEGER NOT NULL REFERENCES production_ingestion_runs(run_id),
+    source_name TEXT NOT NULL,
+    target_season TEXT NOT NULL,
+    match_date DATE NOT NULL,
+    home_team TEXT NOT NULL,
+    away_team TEXT NOT NULL,
+    home_xg FLOAT NOT NULL,
+    away_xg FLOAT NOT NULL,
+    raw_row_json JSONB NOT NULL,
+    validation_status TEXT NOT NULL,
+    validation_error TEXT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CHECK (home_team <> away_team),
+    CHECK (home_xg >= 0),
+    CHECK (away_xg >= 0)
+);
+
 CREATE TABLE IF NOT EXISTS production_data_freshness (
     source_name TEXT PRIMARY KEY,
     last_successful_run_id INTEGER NULL REFERENCES production_ingestion_runs(run_id),
