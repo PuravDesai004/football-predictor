@@ -1,9 +1,18 @@
 from __future__ import annotations
 
-import pandas as pd
-from sqlalchemy import text
+import os
+import pathlib
 
-from data_pipeline import get_engine
+import pandas as pd
+from dotenv import load_dotenv
+from sqlalchemy import create_engine, text
+from sqlalchemy.engine import make_url
+
+
+PROJECT_ROOT = pathlib.Path(__file__).resolve().parents[1]
+DB_CONNECT_TIMEOUT_SECONDS = 5
+
+load_dotenv(PROJECT_ROOT / ".env")
 
 
 EXPECTED_COMPLETED_SEASONS = [
@@ -24,6 +33,71 @@ REQUIRED_HISTORICAL_MATCH_COLUMNS = [
     "result",
     "source_file",
 ]
+
+
+def get_validation_engine():
+    mode = "local_env"
+    try:
+        database_url = os.getenv("DATABASE_URL")
+        if database_url:
+            mode = "database_url"
+            if database_url.startswith("postgres://"):
+                database_url = database_url.replace("postgres://", "postgresql://", 1)
+
+            url = make_url(database_url)
+            connect_args = {"connect_timeout": DB_CONNECT_TIMEOUT_SECONDS}
+            if "sslmode" not in database_url.lower():
+                connect_args["sslmode"] = "require"
+            engine = create_engine(
+                database_url,
+                connect_args=connect_args,
+                pool_pre_ping=True,
+            )
+            db_name = url.database or "unknown"
+        else:
+            db_host = os.getenv("DB_HOST")
+            db_port = os.getenv("DB_PORT")
+            db_name = os.getenv("DB_NAME")
+            db_user = os.getenv("DB_USER")
+            db_pass = os.getenv("DB_PASS")
+            if db_host and db_host.lower() == "localhost":
+                db_host = "127.0.0.1"
+            missing = [
+                name
+                for name, value in {
+                    "DB_HOST": db_host,
+                    "DB_PORT": db_port,
+                    "DB_NAME": db_name,
+                    "DB_USER": db_user,
+                    "DB_PASS": db_pass,
+                }.items()
+                if not value
+            ]
+            if missing:
+                raise ValueError(f"Missing local database settings: {missing}")
+
+            connection_string = (
+                f"postgresql+psycopg2://{db_user}:{db_pass}@{db_host}:{db_port}/{db_name}"
+            )
+            engine = create_engine(
+                connection_string,
+                connect_args={"connect_timeout": DB_CONNECT_TIMEOUT_SECONDS},
+                pool_pre_ping=True,
+            )
+
+        with engine.connect():
+            pass
+
+        print(f"Connected to PostgreSQL database: {db_name}")
+        print(f"Connection mode: {mode}")
+        return engine
+    except Exception as error:
+        print(
+            "Could not connect to PostgreSQL within "
+            f"{DB_CONNECT_TIMEOUT_SECONDS} seconds using {mode}: "
+            f"{type(error).__name__}: {error}"
+        )
+        return None
 
 
 def _table_exists(engine, table_name: str) -> bool:
@@ -395,9 +469,9 @@ def _print_summary(summary_df: pd.DataFrame) -> None:
 
 
 def main() -> None:
-    engine = get_engine()
+    engine = get_validation_engine()
     if engine is None:
-        raise SystemExit("Could not connect to PostgreSQL.")
+        raise SystemExit(1)
 
     validate_historical_match_integrity(engine)
     summary_df = get_historical_match_summary(engine)
