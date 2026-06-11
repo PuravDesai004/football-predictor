@@ -1,40 +1,28 @@
 # Football Predictor Model
 
-A local machine learning project for Premier League match prediction and Fantasy Premier League analysis.
+A local machine learning project for predicting Premier League match outcomes and optimizing Fantasy Premier League squads. Not deployed anywhere. Not a betting tool. Just a personal research project that started small and grew into a three-tier pipeline with a production model trained on five seasons of data.
 
-The project grew through three stages:
+The project went through three stages:
 
-- Tier 1: data foundation, PostgreSQL tables, baseline match prediction, and a rule-based FPL optimizer.
-- Tier 2: full local system with Understat xG, FPL XGBoost points modeling, and the original Streamlit app.
-- Tier 3: multi-season Premier League research, walk-forward validation, final holdout evaluation, and a production-transition pipeline for 2026-27.
-
-This repository is intended for code review and local reproduction. Raw data, secrets, and production model artifacts are intentionally excluded.
+- **Tier 1:** data foundation, PostgreSQL tables, baseline match prediction, and a rule-based FPL optimizer.
+- **Tier 2:** full local system with Understat xG data, FPL XGBoost points modeling, and the original Streamlit app.
+- **Tier 3:** multi-season research, walk-forward validation, final holdout evaluation, and a production-ready local pipeline for 2026-27.
 
 ## Current Status
 
-- Tier 3 research is complete.
-- The production model has been trained locally on 2021-22 through 2025-26.
-- A read-only production Streamlit dashboard is available.
-- The 2026-27 production pipeline exists and waits for real upcoming fixtures/results.
-- Current 2026-27 state may legitimately be empty if football-data CSVs, Understat 2026 data, or unfinished FPL fixtures are unavailable.
+Tier 3 research is complete. The production model is trained locally on 2021-22 through 2025-26. A read-only Streamlit dashboard runs locally.
 
-## Main Production Model
+The 2026-27 pipeline is built and idle. It is waiting for real upcoming fixtures and results. Running it now and getting no predictions back is expected behavior. The pipeline does not fabricate fixtures, predictions, or scores when source data is not available.
 
-The current production model is:
+## Production Model
 
-```text
-production_logistic_elo_v3
-```
+The current production model is `production_logistic_elo_v3`: logistic regression with Elo features added on top of the Tier 3 base feature set. The research champion was `logistic_elo_expanding`.
 
-It is a logistic regression model using the Tier 3 base feature set plus Elo features. The production artifact was trained locally on:
+- **Trained on:** 2021-22 through 2025-26
+- **Features:** 32
+- **Production draw threshold:** 0.30
 
-```text
-2021-22, 2022-23, 2023-24, 2024-25, 2025-26
-```
-
-The production feature artifact contains 32 features. The production draw threshold artifact is `0.30`.
-
-Production artifacts are local-only and ignored by Git:
+Production artifacts are local-only and gitignored:
 
 ```text
 models/saved/production_logistic_elo_v3.pkl
@@ -43,11 +31,11 @@ models/saved/production_draw_threshold_v3.json
 models/saved/production_metadata_v3.json
 ```
 
-## Final Tier 3 Holdout Result
+## Final Holdout Results
 
-The official final holdout season was 2025-26. It was evaluated once after the model candidate was frozen.
+The holdout season was 2025-26. The model candidate was frozen before any 2025-26 data was used, then evaluated once.
 
-Argmax final holdout metrics:
+**Argmax predictions:**
 
 | Metric | Value |
 | --- | ---: |
@@ -56,7 +44,7 @@ Argmax final holdout metrics:
 | Brier | 0.6372 |
 | Draw F1 | 0.0000 |
 
-Draw overlay final holdout metrics:
+**Draw overlay, final holdout threshold 0.24:**
 
 | Metric | Value |
 | --- | ---: |
@@ -65,23 +53,17 @@ Draw overlay final holdout metrics:
 | Brier | 0.6372 |
 | Draw F1 | 0.1159 |
 
-Main weakness:
+Draw F1 of 0.0000 under argmax is the honest number. Draws are systematically underpredicted, and the model leans toward home wins more than it should. The draw overlay surfaces some draw risk, but it does not improve probability quality. It trades home/away accuracy for marginal draw recall, so it is documented as a draw-risk helper rather than an upgrade to the default model.
 
-- Draw underprediction.
-- Home prediction bias.
-- Some high-confidence wrong predictions.
-
-The draw overlay is documented as a draw-risk helper only. It is not the default final probability model and should not be presented as improving probability quality.
+48% accuracy on three-class Premier League prediction without odds data is not shocking, but it leaves clear room for improvement. For this kind of model, log loss, Brier score, and calibration matter as much as hard-label accuracy.
 
 ## Production Dashboard
-
-Run the production dashboard locally:
 
 ```bash
 streamlit run app/production_dashboard.py
 ```
 
-Dashboard tabs:
+Tabs:
 
 - Overview
 - Pipeline Status
@@ -90,9 +72,9 @@ Dashboard tabs:
 - Reports
 - How To Run
 
-The dashboard is read-only by default. It checks artifact availability, summarizes production table state, renders Tier 3 reports, and handles PostgreSQL unavailability with a clean UI state.
+The dashboard is read-only. It checks artifact availability, summarizes production table state, and renders Tier 3 reports. If PostgreSQL is unreachable, it handles that cleanly instead of crashing.
 
-The original Tier 2 app remains available:
+The original Tier 2 app still runs:
 
 ```bash
 streamlit run app/streamlit_app.py
@@ -100,13 +82,13 @@ streamlit run app/streamlit_app.py
 
 ## Weekly Production Pipeline
 
-Run the full local production workflow:
+Full pipeline:
 
 ```bash
 python src/production/run_weekly_pipeline.py --target-season 2026-27
 ```
 
-Individual production steps:
+Individual steps, if you want to run them separately:
 
 ```bash
 python src/production/weekly_ingest.py --target-season 2026-27
@@ -115,19 +97,43 @@ python src/production/predict_production_matches.py --target-season 2026-27
 python src/production/score_predictions.py --target-season 2026-27
 ```
 
-The pipeline is designed to skip safely when real source data is unavailable. It does not create fake fixtures, fake predictions, or fake scores.
+The pipeline skips safely when source data is not available. No fake fixtures, no fake predictions, no fake scores.
 
-## Important Caveats
+## Setup
 
-- Requires a local PostgreSQL database named `football_db`.
-- Requires local environment variables in `.env`; secrets are not included in this repository.
-- Raw football-data CSVs are ignored by Git.
-- Production model artifacts are ignored by Git.
-- Some Tier 2 model artifacts are intentionally tracked because the original local Streamlit app depends on them.
-- This project is not betting advice.
-- No odds, sentiment/NLP, multi-league production support, Supabase deployment, or Android APK work is included in the current production transition.
+Requires a local PostgreSQL database named `football_db` and a `.env` file.
 
-## Directory Overview
+```bash
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements.txt
+```
+
+Create `.env` and do not commit it:
+
+```text
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=football_db
+DB_USER=your_username
+DB_PASS=your_password
+```
+
+The code also reads `DATABASE_URL` if you are pointing at a hosted PostgreSQL instance.
+
+## Validation
+
+```bash
+python -m py_compile app/production_dashboard.py
+python -m py_compile src/production/run_weekly_pipeline.py
+python src/tier3_validation.py
+streamlit run app/production_dashboard.py
+python src/production/run_weekly_pipeline.py --target-season 2026-27
+```
+
+If PostgreSQL is unreachable, `tier3_validation.py` fails cleanly within the configured timeout instead of hanging indefinitely.
+
+## Directory
 
 ```text
 Football Predictor Model/
@@ -135,14 +141,14 @@ Football Predictor Model/
 |   |-- streamlit_app.py              # Tier 2 local app
 |   `-- production_dashboard.py       # Production status dashboard
 |-- data/
-|   `-- historical/                   # Local football-data CSVs ignored except .gitkeep
+|   `-- historical/                   # Local football-data CSVs, gitignored
 |-- docs/
 |   |-- tier3_experiment_summary.md
 |   |-- tier3_final_holdout_report.md
 |   |-- tier3_final_error_analysis.md
 |   `-- tier3_style_source_audit.md
 |-- models/
-|   `-- saved/                        # Production artifacts ignored; selected Tier 2 artifacts tracked
+|   `-- saved/                        # Production artifacts gitignored; some Tier 2 artifacts tracked
 |-- sql/
 |   |-- schema.sql
 |   |-- feature_queries.sql
@@ -167,53 +173,19 @@ Football Predictor Model/
 `-- requirements.txt
 ```
 
-## Setup Notes
+## Data Sources
 
-Create a virtual environment and install dependencies:
+- Fantasy Premier League API
+- football-data.co.uk CSVs
+- Understat historical xG data
 
-```bash
-python -m venv .venv
-.venv\Scripts\activate
-pip install -r requirements.txt
-```
+All features are pre-match only. No same-gameweek FPL leakage. No random splits on time-ordered data. The holdout was evaluated once after the model was frozen.
 
-Create a local `.env` file. Do not commit it.
+The production model skips H2H, style, pressure, Poisson, odds, manager, sentiment, injury, and rivalry features. Those ideas are not automatically bad, but this version prioritizes a feature set that is auditable, stable, and leakage-free.
 
-```text
-DB_HOST=localhost
-DB_PORT=5432
-DB_NAME=football_db
-DB_USER=your_username
-DB_PASS=your_password
-```
+## GitHub Safety Check
 
-For hosted PostgreSQL, the code also supports `DATABASE_URL`. Do not commit real credentials.
-
-## Validation Commands
-
-Useful local checks:
-
-```bash
-python -m py_compile app/production_dashboard.py
-python -m py_compile src/production/run_weekly_pipeline.py
-python src/tier3_validation.py
-streamlit run app/production_dashboard.py
-python src/production/run_weekly_pipeline.py --target-season 2026-27
-```
-
-If PostgreSQL is unreachable, `src/tier3_validation.py` should fail clearly within the configured timeout instead of hanging.
-
-## GitHub Safety
-
-The repository is prepared so sensitive and heavy local files stay out of GitHub:
-
-- `.env` is ignored.
-- `.streamlit/secrets.toml` is ignored.
-- `data/historical/*.csv` is ignored.
-- Production model artifacts under `models/saved/production_*` are ignored.
-- Python caches, virtual environments, and local generated data folders are ignored.
-
-Before uploading, check:
+Before pushing:
 
 ```bash
 git status --short
@@ -224,24 +196,11 @@ git check-ignore -v models/saved/production_draw_threshold_v3.json
 git check-ignore -v models/saved/production_metadata_v3.json
 ```
 
-Do not upload raw data, database dumps, secrets, or local-only production model artifacts.
+Raw data, database dumps, secrets, and production model artifacts should not be in this repository.
 
-## Data Sources
+---
 
-- Fantasy Premier League API
-- football-data.co.uk local CSVs
-- Understat historical xG data
-
-All research and production steps are designed around time-safe validation and pre-match feature availability.
-
-## Design Principles
-
-- No random train/test splits on time-ordered match data.
-- No final-holdout tuning after seeing 2025-26.
-- No fake production fixtures, predictions, or scores.
-- No same-gameweek leakage in FPL features.
-- No H2H, style, pressure, Poisson, odds, manager, sentiment, injury, or rivalry features in the final production model.
-- Probability quality matters; hard-label accuracy alone is not enough.
+*This project is not betting advice.*
 
 ---
 
