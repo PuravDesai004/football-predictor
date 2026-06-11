@@ -27,5 +27,16 @@ models/saved/*.json
 models/saved/style_*.pkl
 models/saved/style_*.json
 
+# Production model artifacts (local only, never commit)
+models/saved/production_*.pkl
+models/saved/production_*.json
+
+# Generated report output
+docs/Football_Predictor_Report.html
+docs/*.pdf
+
+# Python cache folders
+**/__pycache__/
+
 .streamlit/secrets.toml
 .DS_Store
