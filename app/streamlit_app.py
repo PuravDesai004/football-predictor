@@ -287,12 +287,12 @@ def clip_probability(value):
 
 def render_header(kicker, title, subtitle):
     st.markdown(
-        f"""
-        <div class="page-kicker">{escape(kicker)}</div>
-        <div class="page-title">{escape(title)}</div>
-        <div class="page-subtitle">{escape(subtitle)}</div>
-        <div class="section-rule"></div>
-        """,
+        (
+            f'<div class="page-kicker">{escape(kicker)}</div>'
+            f'<div class="page-title">{escape(title)}</div>'
+            f'<div class="page-subtitle">{escape(subtitle)}</div>'
+            '<div class="section-rule"></div>'
+        ),
         unsafe_allow_html=True,
     )
 
@@ -302,13 +302,13 @@ def render_metric_cards(metrics):
     for label, value, note in metrics:
         note_html = f'<div class="metric-note">{escape(note)}</div>' if note else ""
         cards.append(
-            f"""
-            <div class="metric-card">
-                <div class="metric-label">{escape(label)}</div>
-                <div class="metric-value">{escape(str(value))}</div>
-                {note_html}
-            </div>
-            """
+            (
+                '<div class="metric-card">'
+                f'<div class="metric-label">{escape(label)}</div>'
+                f'<div class="metric-value">{escape(str(value))}</div>'
+                f"{note_html}"
+                "</div>"
+            )
         )
 
     st.markdown(
