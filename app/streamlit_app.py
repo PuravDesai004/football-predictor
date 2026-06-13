@@ -48,7 +48,7 @@ POSITION_LABELS = {
 }
 
 st.set_page_config(
-    page_title="Football ML Predictor",
+    page_title="Premier League ML Lab",
     layout="wide",
 )
 
@@ -147,16 +147,6 @@ st.markdown(
             margin: 1.6rem 0 1.8rem;
         }
 
-        .hero-shell {
-            background:
-                linear-gradient(135deg, rgba(45, 212, 191, 0.12), transparent 42%),
-                linear-gradient(180deg, #15181d, #101318);
-            border: 1px solid var(--panel-border);
-            border-radius: 8px;
-            padding: clamp(1.3rem, 3vw, 2rem);
-            margin-bottom: 1.4rem;
-        }
-
         .metric-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -234,14 +224,6 @@ st.markdown(
             color: #ccfbf1;
             padding: 0.95rem 1rem;
             margin: 1rem 0 1.25rem;
-        }
-
-        .control-strip {
-            background: var(--panel-bg);
-            border: 1px solid var(--panel-border);
-            border-radius: 8px;
-            padding: 1rem 1rem 0.65rem;
-            margin-bottom: 1rem;
         }
 
         .scoreboard {
@@ -348,6 +330,123 @@ st.markdown(
             background: linear-gradient(90deg, var(--accent), var(--blue));
             border-radius: 999px;
             height: 100%;
+        }
+
+        .stacked-bar {
+            background: #222832;
+            border-radius: 999px;
+            display: flex;
+            height: 1rem;
+            margin: 1rem 0 0.45rem;
+            overflow: hidden;
+        }
+
+        .bar-home {
+            background: #38bdf8;
+        }
+
+        .bar-draw {
+            background: #f59e0b;
+        }
+
+        .bar-away {
+            background: #ef4444;
+        }
+
+        .bar-legend {
+            color: var(--muted);
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1rem;
+            font-size: 0.84rem;
+            margin-bottom: 1.35rem;
+        }
+
+        .bar-dot {
+            border-radius: 999px;
+            display: inline-block;
+            height: 0.65rem;
+            margin-right: 0.35rem;
+            width: 0.65rem;
+        }
+
+        .pitch {
+            background:
+                linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+                linear-gradient(180deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+                linear-gradient(180deg, rgba(20, 184, 166, 0.12), rgba(17, 24, 39, 0.88));
+            background-size: 48px 48px, 48px 48px, auto;
+            border: 1px solid var(--panel-border);
+            border-radius: 8px;
+            margin: 1rem 0 1.5rem;
+            padding: 1.2rem;
+        }
+
+        .pitch-row {
+            display: grid;
+            gap: 0.8rem;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            margin: 0.95rem 0;
+        }
+
+        .pitch-label {
+            color: var(--muted);
+            font-size: 0.78rem;
+            font-weight: 760;
+            letter-spacing: 0.08em;
+            margin-top: 1rem;
+            text-align: center;
+            text-transform: uppercase;
+        }
+
+        .player-card {
+            background: rgba(17, 24, 39, 0.92);
+            border: 1px solid rgba(45, 212, 191, 0.28);
+            border-left: 4px solid var(--accent);
+            border-radius: 8px;
+            min-width: 0;
+            padding: 0.8rem;
+        }
+
+        .player-name {
+            color: var(--text);
+            font-size: 0.98rem;
+            font-weight: 780;
+            line-height: 1.2;
+            min-height: 2.35rem;
+            overflow-wrap: anywhere;
+        }
+
+        .player-meta {
+            color: var(--muted);
+            font-size: 0.78rem;
+            font-weight: 700;
+            margin-top: 0.35rem;
+        }
+
+        .player-statline {
+            display: flex;
+            gap: 0.75rem;
+            justify-content: space-between;
+            margin-top: 0.7rem;
+        }
+
+        .player-stat {
+            min-width: 0;
+        }
+
+        .player-stat-label {
+            color: var(--muted);
+            font-size: 0.68rem;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+
+        .player-stat-value {
+            color: var(--text);
+            font-size: 0.95rem;
+            font-weight: 780;
+            margin-top: 0.1rem;
         }
 
         .captain-panel {
@@ -652,6 +751,48 @@ def render_probability_bars(probabilities):
     )
 
 
+def confidence_label(probability):
+    if probability >= 0.65:
+        return "High confidence"
+    if probability >= 0.45:
+        return "Medium confidence"
+    return "Low confidence"
+
+
+def render_stacked_probability_bar(home_team, away_team, home_prob, draw_prob, away_prob):
+    home_width = max(0.0, min(float(home_prob), 1.0)) * 100
+    draw_width = max(0.0, min(float(draw_prob), 1.0)) * 100
+    away_width = max(0.0, min(float(away_prob), 1.0)) * 100
+
+    st.markdown(
+        (
+            '<div class="stacked-bar">'
+            f'<div class="bar-home" style="width: {home_width:.1f}%"></div>'
+            f'<div class="bar-draw" style="width: {draw_width:.1f}%"></div>'
+            f'<div class="bar-away" style="width: {away_width:.1f}%"></div>'
+            "</div>"
+            '<div class="bar-legend">'
+            f'<span><span class="bar-dot bar-home"></span>{escape(home_team)} {home_width:.1f}%</span>'
+            f'<span><span class="bar-dot bar-draw"></span>Draw {draw_width:.1f}%</span>'
+            f'<span><span class="bar-dot bar-away"></span>{escape(away_team)} {away_width:.1f}%</span>'
+            "</div>"
+        ),
+        unsafe_allow_html=True,
+    )
+
+
+def explain_match_result(best_result, home_team, away_team, home_prob, draw_prob, away_prob):
+    confidence = max(home_prob, draw_prob, away_prob)
+    if best_result == "H":
+        result_text = f"The model favors {home_team}"
+    elif best_result == "A":
+        result_text = f"The model favors {away_team}"
+    else:
+        result_text = "The model sees this fixture as draw-leaning"
+
+    return f"{result_text} with {confidence_label(confidence).lower()} based on the current feature set."
+
+
 def render_captain_panel(captain):
     start_prob = captain.get("start_probability", 1.0)
     if pd.isna(start_prob):
@@ -684,6 +825,63 @@ def render_captain_panel(captain):
             "</div>"
             "</div>"
         ),
+        unsafe_allow_html=True,
+    )
+
+
+def player_position_label(position):
+    return {
+        1: "GK",
+        2: "DEF",
+        3: "MID",
+        4: "FWD",
+    }.get(int(position), "Player")
+
+
+def render_player_card(row):
+    player_name = f"{row['first_name']} {row['second_name']}"
+    team_name = row.get("team_name", "")
+    position = player_position_label(row.get("position", 0))
+    role = row.get("squad_role", "Squad")
+    price = float(row.get("price", 0.0))
+    points = float(row.get("estimated_points", 0.0))
+
+    return (
+        '<div class="player-card">'
+        f'<div class="player-name">{escape(player_name)}</div>'
+        f'<div class="player-meta">{escape(str(team_name))} · {escape(position)} · {escape(str(role))}</div>'
+        '<div class="player-statline">'
+        '<div class="player-stat">'
+        '<div class="player-stat-label">Price</div>'
+        f'<div class="player-stat-value">GBP {price:.1f}m</div>'
+        "</div>"
+        '<div class="player-stat">'
+        '<div class="player-stat-label">Points</div>'
+        f'<div class="player-stat-value">{points:.1f}</div>'
+        "</div>"
+        "</div>"
+        "</div>"
+    )
+
+
+def render_squad_pitch(squad):
+    rows = []
+    for position in [1, 2, 3, 4]:
+        pos_players = squad[squad["position"] == position].copy()
+        pos_players = pos_players.sort_values(
+            ["is_starter", "estimated_points"],
+            ascending=[False, False],
+        )
+        cards = "".join(render_player_card(row) for _, row in pos_players.iterrows())
+        rows.append(
+            (
+                f'<div class="pitch-label">{escape(POSITION_LABELS[position])}</div>'
+                f'<div class="pitch-row">{cards}</div>'
+            )
+        )
+
+    st.markdown(
+        f'<div class="pitch">{"".join(rows)}</div>',
         unsafe_allow_html=True,
     )
 
@@ -924,13 +1122,13 @@ models_for_sidebar = load_models()
 _, active_classifier_label = get_active_classifier(models_for_sidebar)
 
 with st.sidebar:
-    st.title("Football ML")
-    st.caption("Premier League Predictor + FPL Optimizer")
+    st.title("Football Predictor")
+    st.caption("Premier League ML Lab")
     st.markdown("---")
 
     page = st.radio(
         "Pages",
-        ["Match Predictor", "FPL Team Selector", "About"],
+        ["Match Predictor", "FPL Optimizer", "Model Info"],
     )
 
     st.markdown("---")
@@ -1040,10 +1238,11 @@ if page == "Match Predictor":
 
         st.markdown("### Match Result")
         render_match_scoreboard(home_team, away_team, pred_home, pred_away, result_label)
+        confidence = max(home_prob, draw_prob, away_prob)
         render_metric_cards(
             [
                 ("Model", classifier_label, "Active classifier"),
-                ("Confidence", f"{max(home_prob, draw_prob, away_prob):.1%}", "Highest outcome probability"),
+                ("Confidence", f"{confidence:.1%}", confidence_label(confidence)),
             ]
         )
 
@@ -1055,15 +1254,26 @@ if page == "Match Predictor":
                 (f"{away_team} Win", away_prob),
             ]
         )
+        render_stacked_probability_bar(home_team, away_team, home_prob, draw_prob, away_prob)
+        render_status_panel(
+            explain_match_result(
+                best_result,
+                home_team,
+                away_team,
+                home_prob,
+                draw_prob,
+                away_prob,
+            )
+        )
         st.markdown(
             '<div class="caption-muted">Score is a rough estimate. Win, draw, and loss probabilities are the primary output.</div>',
             unsafe_allow_html=True,
         )
 
-elif page == "FPL Team Selector":
+elif page == "FPL Optimizer":
     render_header(
         "Squad Optimizer",
-        "FPL Team Selector",
+        "FPL Optimizer",
         (
             "Build an optimized 15-player squad within budget using the FPL points model "
             "and linear programming."
@@ -1150,6 +1360,7 @@ elif page == "FPL Team Selector":
             captain = captain_pool.sort_values("captain_score", ascending=False).iloc[0]
             total_cost = squad["price"].sum()
             total_pts = squad["estimated_points"].sum()
+            remaining_budget = budget - total_cost
 
             captain_name = f"{captain['first_name']} {captain['second_name']}"
 
@@ -1158,23 +1369,14 @@ elif page == "FPL Team Selector":
                 [
                     ("Total Cost", f"GBP {total_cost:.1f}m", None),
                     ("Estimated Points", f"{total_pts:.1f}", None),
+                    ("Remaining Budget", f"GBP {remaining_budget:.1f}m", None),
                     ("Captain", captain_name, captain.get("team_name", "")),
                 ]
             )
 
             st.markdown("---")
-            st.markdown("### Squad")
-            for pos in [1, 2, 3, 4]:
-                pos_players = squad[squad["position"] == pos].copy()
-                pos_players = pos_players.sort_values("estimated_points", ascending=False)
-
-                st.subheader(POSITION_LABELS[pos])
-                st.dataframe(
-                    format_squad_table(pos_players),
-                    use_container_width=True,
-                    hide_index=True,
-                    column_config=squad_table_config(),
-                )
+            st.markdown("### Squad Builder")
+            render_squad_pitch(squad)
 
             st.markdown("---")
             st.markdown("### Captain Recommendation")
@@ -1189,26 +1391,44 @@ elif page == "FPL Team Selector":
                 unsafe_allow_html=True,
             )
 
-elif page == "About":
+            with st.expander("View Detailed Squad Stats"):
+                for pos in [1, 2, 3, 4]:
+                    pos_players = squad[squad["position"] == pos].copy()
+                    pos_players = pos_players.sort_values(
+                        "estimated_points",
+                        ascending=False,
+                    )
+
+                    st.subheader(POSITION_LABELS[pos])
+                    st.dataframe(
+                        format_squad_table(pos_players),
+                        use_container_width=True,
+                        hide_index=True,
+                        column_config=squad_table_config(),
+                    )
+
+elif page == "Model Info":
     render_header(
-        "Project Overview",
-        "Football ML Prediction System",
-        "A Streamlit dashboard for Premier League match probabilities and FPL squad selection.",
+        "Model Report",
+        "Premier League ML Lab",
+        "A Tier 2 football analytics system for match probabilities and FPL squad optimization.",
     )
 
-    st.markdown("### Project Summary")
-    st.write(
-        "This app predicts Premier League match outcomes and builds optimized FPL squads. "
-        "It combines official FPL API data, Understat xG data, time-safe feature engineering, "
-        "machine learning models, and linear programming."
+    st.markdown("### Architecture")
+    render_metric_cards(
+        [
+            ("Tier 1", "Baseline", "Core FPL data and logistic model foundation"),
+            ("Tier 2", "XGBoost + xG", "Understat features, rolling form, and FPL history"),
+            ("Serving", "Streamlit + Supabase", "Cloud dashboard backed by Postgres"),
+        ]
     )
 
-    st.markdown("### Models")
-    st.write("- XGBoost Classifier for match Win/Draw/Loss probabilities")
-    st.write("- Logistic Regression as match classifier fallback")
-    st.write("- XGBoost Regressors for home and away goal estimates")
-    st.write("- XGBoost Regressor for FPL player points")
-    st.write("- PuLP optimizer for FPL squad selection")
+    st.markdown("### Model Stack")
+    st.write("- XGBoost classifier for match Win, Draw, and Loss probabilities")
+    st.write("- Logistic Regression fallback for match classification")
+    st.write("- XGBoost regressors for home and away goal estimates")
+    st.write("- XGBoost regressor for FPL player points")
+    st.write("- PuLP linear optimizer for squad selection under FPL constraints")
 
     st.markdown("### Current Metrics")
     render_metric_cards(
@@ -1221,8 +1441,14 @@ elif page == "About":
     )
 
     st.markdown("### Data Sources")
-    st.write("- FPL Official API: players, prices, availability, fixtures, gameweek history")
-    st.write("- Understat: xG, xGA, tactical team-history data")
+    render_status_panel(
+        "The app combines official FPL player, fixture, price, availability, and gameweek data with Understat xG and tactical team-history features."
+    )
+
+    st.markdown("### Limitations")
+    st.warning(
+        "Football outcomes are noisy. Draws are especially difficult to model, and the predicted scoreline should be treated as an estimate. This is an analytics project, not a decision-making guarantee."
+    )
 
     st.markdown("### Built By")
     st.write("Purav Desai, B.Tech IT, SCET Surat")
