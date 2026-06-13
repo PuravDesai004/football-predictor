@@ -2,6 +2,7 @@ import json
 import math
 import sys
 import warnings
+from html import escape
 from pathlib import Path
 
 import joblib
@@ -49,6 +50,142 @@ POSITION_LABELS = {
 st.set_page_config(
     page_title="Football ML Predictor",
     layout="wide",
+)
+
+st.markdown(
+    """
+    <style>
+        :root {
+            --app-bg: #0b0f14;
+            --panel-bg: #111720;
+            --panel-border: #273241;
+            --muted: #98a2b3;
+            --text: #f8fafc;
+            --accent: #3b82f6;
+            --accent-strong: #2563eb;
+            --success: #16a34a;
+        }
+
+        .stApp {
+            background: var(--app-bg);
+            color: var(--text);
+        }
+
+        [data-testid="stSidebar"] {
+            background: #151922;
+            border-right: 1px solid var(--panel-border);
+        }
+
+        [data-testid="stSidebar"] h1 {
+            font-size: 1.65rem;
+            margin-bottom: 0.2rem;
+        }
+
+        [data-testid="stSidebar"] [data-testid="stCaptionContainer"] {
+            color: var(--muted);
+        }
+
+        .block-container {
+            max-width: 1320px;
+            padding-top: 4.5rem;
+            padding-bottom: 4rem;
+        }
+
+        h1, h2, h3 {
+            letter-spacing: 0;
+        }
+
+        .page-kicker {
+            color: var(--accent);
+            font-size: 0.82rem;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            margin-bottom: 0.5rem;
+            text-transform: uppercase;
+        }
+
+        .page-title {
+            font-size: clamp(2rem, 4vw, 3.4rem);
+            font-weight: 760;
+            line-height: 1.05;
+            margin-bottom: 0.75rem;
+        }
+
+        .page-subtitle {
+            color: var(--muted);
+            font-size: 1.02rem;
+            line-height: 1.55;
+            max-width: 860px;
+            margin-bottom: 1.7rem;
+        }
+
+        .section-rule {
+            border-top: 1px solid var(--panel-border);
+            margin: 1.6rem 0 1.8rem;
+        }
+
+        .metric-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 1rem;
+            margin: 1rem 0 1.8rem;
+        }
+
+        .metric-card {
+            background: var(--panel-bg);
+            border: 1px solid var(--panel-border);
+            border-radius: 8px;
+            padding: 1rem 1.05rem;
+            min-width: 0;
+        }
+
+        .metric-label {
+            color: var(--muted);
+            font-size: 0.84rem;
+            font-weight: 700;
+            margin-bottom: 0.45rem;
+            text-transform: uppercase;
+        }
+
+        .metric-value {
+            color: var(--text);
+            font-size: clamp(1.35rem, 2vw, 2rem);
+            font-weight: 740;
+            line-height: 1.2;
+            overflow-wrap: anywhere;
+            word-break: normal;
+        }
+
+        .metric-note {
+            color: var(--muted);
+            font-size: 0.85rem;
+            line-height: 1.4;
+            margin-top: 0.35rem;
+        }
+
+        .status-panel {
+            background: #10243a;
+            border: 1px solid #21476f;
+            border-radius: 8px;
+            color: #bfdbfe;
+            padding: 0.95rem 1rem;
+            margin: 1rem 0 1.25rem;
+        }
+
+        .stButton > button {
+            border-radius: 8px;
+            font-weight: 700;
+            min-height: 2.8rem;
+        }
+
+        .stDataFrame {
+            border: 1px solid var(--panel-border);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+    </style>
+    """,
+    unsafe_allow_html=True,
 )
 
 
@@ -146,6 +283,45 @@ def get_active_classifier(models):
 # Keeps progress values safe for Streamlit.
 def clip_probability(value):
     return float(np.clip(float(value), 0.0, 1.0))
+
+
+def render_header(kicker, title, subtitle):
+    st.markdown(
+        f"""
+        <div class="page-kicker">{escape(kicker)}</div>
+        <div class="page-title">{escape(title)}</div>
+        <div class="page-subtitle">{escape(subtitle)}</div>
+        <div class="section-rule"></div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_metric_cards(metrics):
+    cards = []
+    for label, value, note in metrics:
+        note_html = f'<div class="metric-note">{escape(note)}</div>' if note else ""
+        cards.append(
+            f"""
+            <div class="metric-card">
+                <div class="metric-label">{escape(label)}</div>
+                <div class="metric-value">{escape(str(value))}</div>
+                {note_html}
+            </div>
+            """
+        )
+
+    st.markdown(
+        f'<div class="metric-grid">{"".join(cards)}</div>',
+        unsafe_allow_html=True,
+    )
+
+
+def render_status_panel(message):
+    st.markdown(
+        f'<div class="status-panel">{escape(message)}</div>',
+        unsafe_allow_html=True,
+    )
 
 
 # Loads team names for the match predictor.
@@ -329,34 +505,48 @@ def prepare_squad_for_display(squad):
 
 # Returns a display-friendly squad table with optional model serving fields.
 def format_squad_table(pos_players):
+    table = pos_players.copy()
+    first_name = table.get("first_name", pd.Series("", index=table.index)).fillna("")
+    second_name = table.get("second_name", pd.Series("", index=table.index)).fillna("")
+    table["Player"] = (first_name.astype(str) + " " + second_name.astype(str)).str.strip()
+
+    rename_map = {
+        "team_name": "Club",
+        "squad_role": "Role",
+        "price": "Price",
+        "form": "Form",
+        "raw_estimated_points": "Raw Est. Pts",
+        "start_probability": "Start Prob.",
+        "estimated_points": "Est. Pts",
+    }
+    table = table.rename(columns=rename_map)
+
     display_cols = [
-        "first_name",
-        "second_name",
-        "team_name",
-        "squad_role",
-        "price",
-        "form",
-        "raw_estimated_points",
-        "start_probability",
-        "estimated_points",
+        "Player",
+        "Club",
+        "Role",
+        "Price",
+        "Form",
+        "Raw Est. Pts",
+        "Start Prob.",
+        "Est. Pts",
     ]
-    display_cols = [col for col in display_cols if col in pos_players.columns]
+    display_cols = [col for col in display_cols if col in table.columns]
 
-    table = pos_players[display_cols].rename(
-        columns={
-            "first_name": "First",
-            "second_name": "Last",
-            "team_name": "Club",
-            "squad_role": "Role",
-            "price": "Price",
-            "form": "Form",
-            "raw_estimated_points": "Raw Est. Pts",
-            "start_probability": "Start Prob.",
-            "estimated_points": "Est. Pts",
-        }
-    )
+    return table[display_cols]
 
-    return table
+
+def squad_table_config():
+    return {
+        "Player": st.column_config.TextColumn("Player", width="large"),
+        "Club": st.column_config.TextColumn("Club", width="medium"),
+        "Role": st.column_config.TextColumn("Role", width="small"),
+        "Price": st.column_config.NumberColumn("Price", format="%.1f"),
+        "Form": st.column_config.NumberColumn("Form", format="%.1f"),
+        "Raw Est. Pts": st.column_config.NumberColumn("Raw Est. Pts", format="%.2f"),
+        "Start Prob.": st.column_config.NumberColumn("Start Prob.", format="%.0f"),
+        "Est. Pts": st.column_config.NumberColumn("Est. Pts", format="%.2f"),
+    }
 
 
 engine = load_engine()
@@ -384,12 +574,14 @@ with st.sidebar:
     st.caption("Models: XGBoost + Logistic Regression")
 
 if page == "Match Predictor":
-    st.title("Premier League Match Predictor")
-    st.caption(
-        "Predicts Win/Draw/Loss probability and expected score using rolling form, "
-        "team strength, xG, and fixture difficulty."
+    render_header(
+        "Match Predictor",
+        "Premier League Match Predictor",
+        (
+            "Predict Win, Draw, and Loss probabilities using rolling form, team strength, "
+            "xG, and fixture difficulty."
+        ),
     )
-    st.markdown("---")
 
     if engine is None:
         st.stop()
@@ -474,34 +666,41 @@ if page == "Match Predictor":
                 st.stop()
 
         st.markdown("### Prediction")
-        result_col, score_col = st.columns(2)
-        result_col.metric("Predicted Result", result_label)
-        score_col.metric(
-            "Predicted Score",
-            f"{home_team} {pred_home} - {pred_away} {away_team}",
+        render_metric_cards(
+            [
+                ("Predicted Result", result_label, classifier_label),
+                (
+                    "Predicted Score",
+                    f"{home_team} {pred_home} - {pred_away} {away_team}",
+                    "Scoreline is an estimate",
+                ),
+            ]
         )
 
         st.markdown("### Win Probabilities")
+        render_metric_cards(
+            [
+                (f"{home_team} Win", f"{home_prob:.1%}", None),
+                ("Draw", f"{draw_prob:.1%}", None),
+                (f"{away_team} Win", f"{away_prob:.1%}", None),
+            ]
+        )
         col_h, col_d, col_a = st.columns(3)
-        with col_h:
-            st.metric(f"{home_team} Win", f"{home_prob:.1%}")
-            st.progress(home_prob)
-        with col_d:
-            st.metric("Draw", f"{draw_prob:.1%}")
-            st.progress(draw_prob)
-        with col_a:
-            st.metric(f"{away_team} Win", f"{away_prob:.1%}")
-            st.progress(away_prob)
+        col_h.progress(home_prob)
+        col_d.progress(draw_prob)
+        col_a.progress(away_prob)
 
         st.caption("Score is a rough estimate. Win/Draw/Loss probabilities are more reliable.")
 
 elif page == "FPL Team Selector":
-    st.title("FPL Team Selector")
-    st.caption(
-        "Picks an optimized 15-man squad within budget using the FPL points model "
-        "and PuLP linear programming."
+    render_header(
+        "Squad Optimizer",
+        "FPL Team Selector",
+        (
+            "Build an optimized 15-player squad within budget using the FPL points model "
+            "and linear programming."
+        ),
     )
-    st.markdown("---")
 
     col1, col2 = st.columns(2)
     with col1:
@@ -541,7 +740,7 @@ elif page == "FPL Team Selector":
             st.error(f"Refresh failed: {error}")
 
     player_df, points_mode = load_player_data(engine)
-    st.info(f"Using FPL points model: {points_mode}")
+    render_status_panel(f"Using FPL points model: {points_mode}")
     if points_mode == "rule-based fallback":
         st.warning("XGBoost model unavailable. Using rule-based fallback points.")
 
@@ -584,11 +783,16 @@ elif page == "FPL Team Selector":
             total_cost = squad["price"].sum()
             total_pts = squad["estimated_points"].sum()
 
+            captain_name = f"{captain['first_name']} {captain['second_name']}"
+
             st.markdown("### Squad Summary")
-            mc1, mc2, mc3 = st.columns(3)
-            mc1.metric("Total Cost", f"GBP {total_cost:.1f}m")
-            mc2.metric("Est. Total Points", f"{total_pts:.1f}")
-            mc3.metric("Captain", f"{captain['first_name']} {captain['second_name']}")
+            render_metric_cards(
+                [
+                    ("Total Cost", f"GBP {total_cost:.1f}m", None),
+                    ("Estimated Points", f"{total_pts:.1f}", None),
+                    ("Captain", captain_name, captain.get("team_name", "")),
+                ]
+            )
 
             st.markdown("---")
             st.markdown("### Squad")
@@ -601,6 +805,7 @@ elif page == "FPL Team Selector":
                     format_squad_table(pos_players),
                     use_container_width=True,
                     hide_index=True,
+                    column_config=squad_table_config(),
                 )
 
             st.markdown("---")
@@ -623,9 +828,11 @@ elif page == "FPL Team Selector":
             )
 
 elif page == "About":
-    st.title("About This Project")
-    st.caption("Football ML Prediction System")
-    st.markdown("---")
+    render_header(
+        "Project Overview",
+        "Football ML Prediction System",
+        "A Streamlit dashboard for Premier League match probabilities and FPL squad selection.",
+    )
 
     st.markdown("### Project Summary")
     st.write(
