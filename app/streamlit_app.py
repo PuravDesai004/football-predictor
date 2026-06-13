@@ -286,6 +286,96 @@ st.markdown(
             text-align: center;
         }
 
+        .result-card {
+            background:
+                linear-gradient(135deg, rgba(45, 212, 191, 0.16), transparent 40%),
+                linear-gradient(180deg, #15181d, #101318);
+            border: 1px solid var(--panel-border);
+            border-radius: 8px;
+            margin: 1rem 0 1.25rem;
+            padding: clamp(1.1rem, 3vw, 1.6rem);
+        }
+
+        .fixture-title {
+            color: var(--text);
+            font-size: clamp(1.45rem, 3.4vw, 2.6rem);
+            font-weight: 800;
+            line-height: 1.1;
+            overflow-wrap: anywhere;
+        }
+
+        .outcome-badge {
+            background: rgba(45, 212, 191, 0.13);
+            border: 1px solid rgba(45, 212, 191, 0.45);
+            border-radius: 999px;
+            color: #ccfbf1;
+            display: inline-block;
+            font-size: 0.82rem;
+            font-weight: 800;
+            letter-spacing: 0.04em;
+            margin: 1rem 0 0.65rem;
+            padding: 0.45rem 0.75rem;
+            text-transform: uppercase;
+        }
+
+        .result-meta {
+            color: var(--muted);
+            font-size: 0.95rem;
+            font-weight: 700;
+            line-height: 1.45;
+            overflow-wrap: anywhere;
+        }
+
+        .cred-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+            gap: 1rem;
+            margin: 1rem 0 1.8rem;
+        }
+
+        .cred-card {
+            background: var(--panel-bg);
+            border: 1px solid var(--panel-border);
+            border-radius: 8px;
+            min-width: 0;
+            padding: 1rem;
+        }
+
+        .cred-title {
+            color: var(--muted);
+            font-size: 0.78rem;
+            font-weight: 780;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+        }
+
+        .cred-value {
+            color: var(--text);
+            font-size: clamp(1.2rem, 2vw, 1.7rem);
+            font-weight: 800;
+            line-height: 1.2;
+            margin-top: 0.4rem;
+            overflow-wrap: anywhere;
+        }
+
+        .cred-note {
+            color: var(--muted);
+            font-size: 0.84rem;
+            line-height: 1.45;
+            margin-top: 0.35rem;
+        }
+
+        .disclaimer {
+            background: rgba(245, 158, 11, 0.11);
+            border: 1px solid rgba(245, 158, 11, 0.38);
+            border-radius: 8px;
+            color: #fde68a;
+            font-weight: 720;
+            line-height: 1.45;
+            margin: 1rem 0 1.5rem;
+            padding: 1rem;
+        }
+
         .prob-grid {
             display: grid;
             gap: 0.8rem;
@@ -545,6 +635,14 @@ st.markdown(
             .score-core {
                 align-items: flex-start;
             }
+
+            .pitch {
+                padding: 0.85rem;
+            }
+
+            .pitch-row {
+                grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+            }
         }
     </style>
     """,
@@ -727,6 +825,20 @@ def render_match_scoreboard(home_team, away_team, pred_home, pred_away, result_l
     )
 
 
+def render_match_result_card(home_team, away_team, outcome_label, confidence, scoreline):
+    fixture = f"{home_team} vs {away_team}"
+    st.markdown(
+        (
+            '<div class="result-card">'
+            f'<div class="fixture-title">{escape(fixture)}</div>'
+            f'<div class="outcome-badge">Predicted Outcome: {escape(outcome_label)}</div>'
+            f'<div class="result-meta">Projected score: {escape(scoreline)} | {escape(confidence)}</div>'
+            "</div>"
+        ),
+        unsafe_allow_html=True,
+    )
+
+
 def render_probability_bars(probabilities):
     rows = []
     for label, value in probabilities:
@@ -759,6 +871,16 @@ def confidence_label(probability):
     return "Low confidence"
 
 
+def confidence_from_margin(probabilities):
+    ordered = sorted([float(value) for value in probabilities], reverse=True)
+    margin = ordered[0] - ordered[1] if len(ordered) > 1 else ordered[0]
+    if margin >= 0.20:
+        return "High confidence"
+    if margin >= 0.10:
+        return "Medium confidence"
+    return "Low confidence"
+
+
 def render_stacked_probability_bar(home_team, away_team, home_prob, draw_prob, away_prob):
     home_width = max(0.0, min(float(home_prob), 1.0)) * 100
     draw_width = max(0.0, min(float(draw_prob), 1.0)) * 100
@@ -782,7 +904,7 @@ def render_stacked_probability_bar(home_team, away_team, home_prob, draw_prob, a
 
 
 def explain_match_result(best_result, home_team, away_team, home_prob, draw_prob, away_prob):
-    confidence = max(home_prob, draw_prob, away_prob)
+    confidence = confidence_from_margin([home_prob, draw_prob, away_prob])
     if best_result == "H":
         result_text = f"The model favors {home_team}"
     elif best_result == "A":
@@ -790,7 +912,40 @@ def explain_match_result(best_result, home_team, away_team, home_prob, draw_prob
     else:
         result_text = "The model sees this fixture as draw-leaning"
 
-    return f"{result_text} with {confidence_label(confidence).lower()} based on the current feature set."
+    return f"{result_text} with {confidence.lower()} based on the current feature set."
+
+
+def render_model_credibility_cards():
+    cards = [
+        ("Tier 2 Accuracy", "0.570", "XGBoost match classifier"),
+        ("FPL MAE / RMSE", "0.926 / not tracked", "RMSE is not stored in the current artifacts"),
+        ("Data Sources", "FPL API + Understat", "Players, fixtures, xG, rolling form, and history"),
+        ("Model Type", "XGBoost", "Classifier, regressors, and PuLP squad optimizer"),
+    ]
+    rendered = []
+    for title, value, note in cards:
+        rendered.append(
+            (
+                '<div class="cred-card">'
+                f'<div class="cred-title">{escape(title)}</div>'
+                f'<div class="cred-value">{escape(value)}</div>'
+                f'<div class="cred-note">{escape(note)}</div>'
+                "</div>"
+            )
+        )
+
+    st.markdown(
+        f'<div class="cred-grid">{"".join(rendered)}</div>',
+        unsafe_allow_html=True,
+    )
+
+
+def render_disclaimer():
+    st.markdown(
+        '<div class="disclaimer">Analytics tool only. Not betting advice. Football is highly variant.</div>',
+        unsafe_allow_html=True,
+    )
+
 
 
 def render_captain_panel(captain):
@@ -849,7 +1004,7 @@ def render_player_card(row):
     return (
         '<div class="player-card">'
         f'<div class="player-name">{escape(player_name)}</div>'
-        f'<div class="player-meta">{escape(str(team_name))} · {escape(position)} · {escape(str(role))}</div>'
+        f'<div class="player-meta">{escape(str(team_name))} | {escape(position)} | {escape(str(role))}</div>'
         '<div class="player-statline">'
         '<div class="player-stat">'
         '<div class="player-stat-label">Price</div>'
@@ -1237,16 +1392,29 @@ if page == "Match Predictor":
                 st.stop()
 
         st.markdown("### Match Result")
+        scoreline = f"{home_team} {pred_home} - {pred_away} {away_team}"
+        margin_confidence = confidence_from_margin([home_prob, draw_prob, away_prob])
+        render_match_result_card(
+            home_team,
+            away_team,
+            result_label,
+            margin_confidence,
+            scoreline,
+        )
         render_match_scoreboard(home_team, away_team, pred_home, pred_away, result_label)
         confidence = max(home_prob, draw_prob, away_prob)
         render_metric_cards(
             [
                 ("Model", classifier_label, "Active classifier"),
-                ("Confidence", f"{confidence:.1%}", confidence_label(confidence)),
+                ("Confidence", margin_confidence, f"Top probability: {confidence:.1%}"),
             ]
         )
 
         st.markdown("### Win Probabilities")
+        prob_col1, prob_col2, prob_col3 = st.columns(3)
+        prob_col1.metric(f"{home_team} Win", f"{home_prob:.1%}")
+        prob_col2.metric("Draw", f"{draw_prob:.1%}")
+        prob_col3.metric(f"{away_team} Win", f"{away_prob:.1%}")
         render_probability_bars(
             [
                 (f"{home_team} Win", home_prob),
@@ -1367,9 +1535,8 @@ elif page == "FPL Optimizer":
             st.markdown("### Squad Summary")
             render_metric_cards(
                 [
-                    ("Total Cost", f"GBP {total_cost:.1f}m", None),
-                    ("Estimated Points", f"{total_pts:.1f}", None),
-                    ("Remaining Budget", f"GBP {remaining_budget:.1f}m", None),
+                    ("Total Predicted Points", f"{total_pts:.1f}", None),
+                    ("Budget Used", f"GBP {total_cost:.1f}m", f"Remaining: GBP {remaining_budget:.1f}m"),
                     ("Captain", captain_name, captain.get("team_name", "")),
                 ]
             )
@@ -1391,7 +1558,7 @@ elif page == "FPL Optimizer":
                 unsafe_allow_html=True,
             )
 
-            with st.expander("View Detailed Squad Stats"):
+            with st.expander("View Detailed Table"):
                 for pos in [1, 2, 3, 4]:
                     pos_players = squad[squad["position"] == pos].copy()
                     pos_players = pos_players.sort_values(
@@ -1423,6 +1590,9 @@ elif page == "Model Info":
         ]
     )
 
+    st.markdown("### Credibility Snapshot")
+    render_model_credibility_cards()
+
     st.markdown("### Model Stack")
     st.write("- XGBoost classifier for match Win, Draw, and Loss probabilities")
     st.write("- Logistic Regression fallback for match classification")
@@ -1446,9 +1616,7 @@ elif page == "Model Info":
     )
 
     st.markdown("### Limitations")
-    st.warning(
-        "Football outcomes are noisy. Draws are especially difficult to model, and the predicted scoreline should be treated as an estimate. This is an analytics project, not a decision-making guarantee."
-    )
+    render_disclaimer()
 
     st.markdown("### Built By")
     st.write("Purav Desai, B.Tech IT, SCET Surat")
