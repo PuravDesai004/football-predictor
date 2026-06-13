@@ -56,14 +56,18 @@ st.markdown(
     """
     <style>
         :root {
-            --app-bg: #0b0f14;
-            --panel-bg: #111720;
-            --panel-border: #273241;
-            --muted: #98a2b3;
-            --text: #f8fafc;
-            --accent: #3b82f6;
-            --accent-strong: #2563eb;
-            --success: #16a34a;
+            --app-bg: #0b0c0f;
+            --panel-bg: #15181d;
+            --panel-soft: #101318;
+            --panel-border: #2a3038;
+            --muted: #9aa4b2;
+            --text: #f7f8fa;
+            --accent: #2dd4bf;
+            --accent-strong: #14b8a6;
+            --blue: #60a5fa;
+            --amber: #f59e0b;
+            --danger: #f87171;
+            --success: #22c55e;
         }
 
         .stApp {
@@ -71,13 +75,18 @@ st.markdown(
             color: var(--text);
         }
 
+        header[data-testid="stHeader"] {
+            background: rgba(11, 12, 15, 0.78);
+            backdrop-filter: blur(12px);
+        }
+
         [data-testid="stSidebar"] {
-            background: #151922;
+            background: #111318;
             border-right: 1px solid var(--panel-border);
         }
 
         [data-testid="stSidebar"] h1 {
-            font-size: 1.65rem;
+            font-size: 1.8rem;
             margin-bottom: 0.2rem;
         }
 
@@ -85,14 +94,28 @@ st.markdown(
             color: var(--muted);
         }
 
+        [data-testid="stSidebar"] hr {
+            border-color: var(--panel-border);
+            margin: 1.55rem 0;
+        }
+
+        [data-testid="stSidebar"] .stRadio label {
+            border-radius: 8px;
+            padding: 0.18rem 0;
+        }
+
         .block-container {
-            max-width: 1320px;
-            padding-top: 4.5rem;
+            max-width: 1280px;
+            padding-top: 5.4rem;
             padding-bottom: 4rem;
         }
 
         h1, h2, h3 {
             letter-spacing: 0;
+        }
+
+        h3 {
+            margin-top: 1.2rem;
         }
 
         .page-kicker {
@@ -106,7 +129,7 @@ st.markdown(
 
         .page-title {
             font-size: clamp(2rem, 4vw, 3.4rem);
-            font-weight: 760;
+            font-weight: 780;
             line-height: 1.05;
             margin-bottom: 0.75rem;
         }
@@ -124,6 +147,16 @@ st.markdown(
             margin: 1.6rem 0 1.8rem;
         }
 
+        .hero-shell {
+            background:
+                linear-gradient(135deg, rgba(45, 212, 191, 0.12), transparent 42%),
+                linear-gradient(180deg, #15181d, #101318);
+            border: 1px solid var(--panel-border);
+            border-radius: 8px;
+            padding: clamp(1.3rem, 3vw, 2rem);
+            margin-bottom: 1.4rem;
+        }
+
         .metric-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -135,7 +168,7 @@ st.markdown(
             background: var(--panel-bg);
             border: 1px solid var(--panel-border);
             border-radius: 8px;
-            padding: 1rem 1.05rem;
+            padding: 1.05rem 1.1rem;
             min-width: 0;
         }
 
@@ -149,7 +182,7 @@ st.markdown(
 
         .metric-value {
             color: var(--text);
-            font-size: clamp(1.35rem, 2vw, 2rem);
+            font-size: clamp(1.35rem, 2vw, 2.05rem);
             font-weight: 740;
             line-height: 1.2;
             overflow-wrap: anywhere;
@@ -163,13 +196,208 @@ st.markdown(
             margin-top: 0.35rem;
         }
 
-        .status-panel {
-            background: #10243a;
-            border: 1px solid #21476f;
+        .status-grid {
+            display: grid;
+            gap: 0.65rem;
+            margin-top: 0.6rem;
+        }
+
+        .status-chip {
+            align-items: center;
+            background: var(--panel-soft);
+            border: 1px solid var(--panel-border);
             border-radius: 8px;
-            color: #bfdbfe;
+            display: flex;
+            justify-content: space-between;
+            gap: 0.8rem;
+            padding: 0.7rem 0.8rem;
+        }
+
+        .status-chip-label {
+            color: var(--muted);
+            font-size: 0.78rem;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+
+        .status-chip-value {
+            color: var(--text);
+            font-size: 0.92rem;
+            font-weight: 700;
+            text-align: right;
+        }
+
+        .status-panel {
+            background: rgba(45, 212, 191, 0.1);
+            border: 1px solid rgba(45, 212, 191, 0.3);
+            border-radius: 8px;
+            color: #ccfbf1;
             padding: 0.95rem 1rem;
             margin: 1rem 0 1.25rem;
+        }
+
+        .control-strip {
+            background: var(--panel-bg);
+            border: 1px solid var(--panel-border);
+            border-radius: 8px;
+            padding: 1rem 1rem 0.65rem;
+            margin-bottom: 1rem;
+        }
+
+        .scoreboard {
+            background: var(--panel-bg);
+            border: 1px solid var(--panel-border);
+            border-radius: 8px;
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+            gap: 1rem;
+            margin: 1rem 0 1.35rem;
+            overflow: hidden;
+            padding: clamp(1rem, 3vw, 1.45rem);
+        }
+
+        .score-team {
+            min-width: 0;
+        }
+
+        .score-team.away {
+            text-align: right;
+        }
+
+        .score-label {
+            color: var(--muted);
+            font-size: 0.78rem;
+            font-weight: 700;
+            margin-bottom: 0.45rem;
+            text-transform: uppercase;
+        }
+
+        .score-name {
+            color: var(--text);
+            font-size: clamp(1.25rem, 2.8vw, 2.1rem);
+            font-weight: 780;
+            line-height: 1.15;
+            overflow-wrap: anywhere;
+        }
+
+        .score-core {
+            align-items: center;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            min-width: 150px;
+        }
+
+        .scoreline {
+            color: var(--text);
+            font-size: clamp(2.2rem, 5vw, 4rem);
+            font-weight: 800;
+            line-height: 1;
+            white-space: nowrap;
+        }
+
+        .score-outcome {
+            color: var(--accent);
+            font-size: 0.9rem;
+            font-weight: 760;
+            margin-top: 0.55rem;
+            text-align: center;
+        }
+
+        .prob-grid {
+            display: grid;
+            gap: 0.8rem;
+            margin: 1rem 0 1.8rem;
+        }
+
+        .prob-row {
+            background: var(--panel-bg);
+            border: 1px solid var(--panel-border);
+            border-radius: 8px;
+            padding: 0.95rem 1rem;
+        }
+
+        .prob-topline {
+            align-items: center;
+            display: flex;
+            gap: 1rem;
+            justify-content: space-between;
+            margin-bottom: 0.65rem;
+        }
+
+        .prob-label {
+            color: var(--text);
+            font-weight: 730;
+            overflow-wrap: anywhere;
+        }
+
+        .prob-value {
+            color: var(--text);
+            font-weight: 800;
+            white-space: nowrap;
+        }
+
+        .prob-track {
+            background: #222832;
+            border-radius: 999px;
+            height: 0.65rem;
+            overflow: hidden;
+        }
+
+        .prob-fill {
+            background: linear-gradient(90deg, var(--accent), var(--blue));
+            border-radius: 999px;
+            height: 100%;
+        }
+
+        .captain-panel {
+            background: var(--panel-bg);
+            border: 1px solid var(--panel-border);
+            border-radius: 8px;
+            margin: 1rem 0 1.5rem;
+            padding: 1.2rem;
+        }
+
+        .captain-name {
+            color: var(--text);
+            font-size: clamp(1.5rem, 3vw, 2.4rem);
+            font-weight: 790;
+            line-height: 1.15;
+            overflow-wrap: anywhere;
+        }
+
+        .captain-meta {
+            color: var(--muted);
+            font-weight: 700;
+            margin-top: 0.35rem;
+        }
+
+        .captain-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 1rem;
+            margin-top: 1.15rem;
+        }
+
+        .captain-stat {
+            border-top: 1px solid var(--panel-border);
+            padding-top: 0.8rem;
+        }
+
+        .captain-stat-value {
+            color: var(--text);
+            font-size: 1.45rem;
+            font-weight: 780;
+            line-height: 1.15;
+            overflow-wrap: anywhere;
+        }
+
+        .caption-muted {
+            color: var(--muted);
+            font-size: 0.9rem;
+            line-height: 1.5;
+            margin-top: -0.3rem;
+            margin-bottom: 1rem;
         }
 
         .stButton > button {
@@ -178,10 +406,46 @@ st.markdown(
             min-height: 2.8rem;
         }
 
+        .stButton > button[kind="primary"] {
+            background: var(--accent-strong);
+            border-color: var(--accent-strong);
+            color: #05100e;
+        }
+
+        .stButton > button[kind="primary"]:hover {
+            background: var(--accent);
+            border-color: var(--accent);
+            color: #05100e;
+        }
+
+        div[data-baseweb="select"] > div,
+        div[data-testid="stNumberInput"] input,
+        div[data-testid="stTextInput"] input {
+            border-radius: 8px;
+        }
+
         .stDataFrame {
             border: 1px solid var(--panel-border);
             border-radius: 8px;
             overflow: hidden;
+        }
+
+        @media (max-width: 760px) {
+            .block-container {
+                padding-top: 3.5rem;
+            }
+
+            .scoreboard {
+                grid-template-columns: 1fr;
+            }
+
+            .score-team.away {
+                text-align: left;
+            }
+
+            .score-core {
+                align-items: flex-start;
+            }
         }
     </style>
     """,
@@ -317,9 +581,109 @@ def render_metric_cards(metrics):
     )
 
 
+def render_status_chips(items):
+    chips = []
+    for label, value in items:
+        chips.append(
+            (
+                '<div class="status-chip">'
+                f'<div class="status-chip-label">{escape(label)}</div>'
+                f'<div class="status-chip-value">{escape(str(value))}</div>'
+                "</div>"
+            )
+        )
+
+    st.markdown(
+        f'<div class="status-grid">{"".join(chips)}</div>',
+        unsafe_allow_html=True,
+    )
+
+
 def render_status_panel(message):
     st.markdown(
         f'<div class="status-panel">{escape(message)}</div>',
+        unsafe_allow_html=True,
+    )
+
+
+def render_match_scoreboard(home_team, away_team, pred_home, pred_away, result_label):
+    st.markdown(
+        (
+            '<div class="scoreboard">'
+            '<div class="score-team">'
+            '<div class="score-label">Home</div>'
+            f'<div class="score-name">{escape(home_team)}</div>'
+            "</div>"
+            '<div class="score-core">'
+            f'<div class="scoreline">{pred_home} - {pred_away}</div>'
+            f'<div class="score-outcome">{escape(result_label)}</div>'
+            "</div>"
+            '<div class="score-team away">'
+            '<div class="score-label">Away</div>'
+            f'<div class="score-name">{escape(away_team)}</div>'
+            "</div>"
+            "</div>"
+        ),
+        unsafe_allow_html=True,
+    )
+
+
+def render_probability_bars(probabilities):
+    rows = []
+    for label, value in probabilities:
+        percent = max(0.0, min(float(value), 1.0)) * 100
+        rows.append(
+            (
+                '<div class="prob-row">'
+                '<div class="prob-topline">'
+                f'<div class="prob-label">{escape(label)}</div>'
+                f'<div class="prob-value">{percent:.1f}%</div>'
+                "</div>"
+                '<div class="prob-track">'
+                f'<div class="prob-fill" style="width: {percent:.1f}%"></div>'
+                "</div>"
+                "</div>"
+            )
+        )
+
+    st.markdown(
+        f'<div class="prob-grid">{"".join(rows)}</div>',
+        unsafe_allow_html=True,
+    )
+
+
+def render_captain_panel(captain):
+    start_prob = captain.get("start_probability", 1.0)
+    if pd.isna(start_prob):
+        start_prob = 1.0
+
+    captain_name = f"{captain['first_name']} {captain['second_name']}"
+    st.markdown(
+        (
+            '<div class="captain-panel">'
+            '<div class="metric-label">Captain Recommendation</div>'
+            f'<div class="captain-name">{escape(captain_name)}</div>'
+            f'<div class="captain-meta">{escape(str(captain["team_name"]))}</div>'
+            '<div class="captain-stats">'
+            '<div class="captain-stat">'
+            '<div class="metric-label">Price</div>'
+            f'<div class="captain-stat-value">GBP {float(captain["price"]):.1f}m</div>'
+            "</div>"
+            '<div class="captain-stat">'
+            '<div class="metric-label">Form</div>'
+            f'<div class="captain-stat-value">{float(captain["form"]):.1f}</div>'
+            "</div>"
+            '<div class="captain-stat">'
+            '<div class="metric-label">Start Probability</div>'
+            f'<div class="captain-stat-value">{float(start_prob):.0%}</div>'
+            "</div>"
+            '<div class="captain-stat">'
+            '<div class="metric-label">Estimated Points</div>'
+            f'<div class="captain-stat-value">{float(captain["estimated_points"]):.1f}</div>'
+            "</div>"
+            "</div>"
+            "</div>"
+        ),
         unsafe_allow_html=True,
     )
 
@@ -520,6 +884,11 @@ def format_squad_table(pos_players):
         "estimated_points": "Est. Pts",
     }
     table = table.rename(columns=rename_map)
+    if "Start Prob." in table.columns:
+        table["Start Prob."] = pd.to_numeric(
+            table["Start Prob."],
+            errors="coerce",
+        ).fillna(0) * 100
 
     display_cols = [
         "Player",
@@ -544,7 +913,7 @@ def squad_table_config():
         "Price": st.column_config.NumberColumn("Price", format="%.1f"),
         "Form": st.column_config.NumberColumn("Form", format="%.1f"),
         "Raw Est. Pts": st.column_config.NumberColumn("Raw Est. Pts", format="%.2f"),
-        "Start Prob.": st.column_config.NumberColumn("Start Prob.", format="%.0f"),
+        "Start Prob.": st.column_config.NumberColumn("Start Prob.", format="%.0f%%"),
         "Est. Pts": st.column_config.NumberColumn("Est. Pts", format="%.2f"),
     }
 
@@ -566,8 +935,12 @@ with st.sidebar:
 
     st.markdown("---")
     st.caption("Status")
-    st.write(f"Database: {'connected' if engine is not None else 'disconnected'}")
-    st.write(f"Classifier: {active_classifier_label or 'unavailable'}")
+    render_status_chips(
+        [
+            ("Database", "connected" if engine is not None else "disconnected"),
+            ("Classifier", active_classifier_label or "unavailable"),
+        ]
+    )
 
     st.markdown("---")
     st.caption("Data: FPL Official API + Understat")
@@ -665,32 +1038,27 @@ if page == "Match Predictor":
                 st.error(f"Prediction failed: {error}")
                 st.stop()
 
-        st.markdown("### Prediction")
+        st.markdown("### Match Result")
+        render_match_scoreboard(home_team, away_team, pred_home, pred_away, result_label)
         render_metric_cards(
             [
-                ("Predicted Result", result_label, classifier_label),
-                (
-                    "Predicted Score",
-                    f"{home_team} {pred_home} - {pred_away} {away_team}",
-                    "Scoreline is an estimate",
-                ),
+                ("Model", classifier_label, "Active classifier"),
+                ("Confidence", f"{max(home_prob, draw_prob, away_prob):.1%}", "Highest outcome probability"),
             ]
         )
 
         st.markdown("### Win Probabilities")
-        render_metric_cards(
+        render_probability_bars(
             [
-                (f"{home_team} Win", f"{home_prob:.1%}", None),
-                ("Draw", f"{draw_prob:.1%}", None),
-                (f"{away_team} Win", f"{away_prob:.1%}", None),
+                (f"{home_team} Win", home_prob),
+                ("Draw", draw_prob),
+                (f"{away_team} Win", away_prob),
             ]
         )
-        col_h, col_d, col_a = st.columns(3)
-        col_h.progress(home_prob)
-        col_d.progress(draw_prob)
-        col_a.progress(away_prob)
-
-        st.caption("Score is a rough estimate. Win/Draw/Loss probabilities are more reliable.")
+        st.markdown(
+            '<div class="caption-muted">Score is a rough estimate. Win, draw, and loss probabilities are the primary output.</div>',
+            unsafe_allow_html=True,
+        )
 
 elif page == "FPL Team Selector":
     render_header(
@@ -810,21 +1178,15 @@ elif page == "FPL Team Selector":
 
             st.markdown("---")
             st.markdown("### Captain Recommendation")
-            start_prob = captain.get("start_probability", 1.0)
-            if pd.isna(start_prob):
-                start_prob = 1.0
-
-            st.info(
-                f"{captain['first_name']} {captain['second_name']} "
-                f"({captain['team_name']})\n\n"
-                f"Price: GBP {captain['price']:.1f}m\n\n"
-                f"Form: {captain['form']:.1f}\n\n"
-                f"Start Probability: {start_prob:.0%}\n\n"
-                f"Estimated Points: {captain['estimated_points']:.1f}"
-            )
-            st.caption(
-                "Captain score = Estimated Points + 0.4 x Form. "
-                "Only starters are considered when starter roles are available."
+            render_captain_panel(captain)
+            st.markdown(
+                (
+                    '<div class="caption-muted">'
+                    'Captain score uses estimated points with a form adjustment. '
+                    'Starter roles are preferred when available.'
+                    '</div>'
+                ),
+                unsafe_allow_html=True,
             )
 
 elif page == "About":
@@ -849,11 +1211,14 @@ elif page == "About":
     st.write("- PuLP optimizer for FPL squad selection")
 
     st.markdown("### Current Metrics")
-    m1, m2, m3, m4 = st.columns(4)
-    m1.metric("XGBoost Match Accuracy", "0.570")
-    m2.metric("Logistic Match Accuracy", "0.532")
-    m3.metric("FPL XGBoost MAE", "0.926")
-    m4.metric("FPL XGBoost R2", "0.334")
+    render_metric_cards(
+        [
+            ("XGBoost Match Accuracy", "0.570", None),
+            ("Logistic Match Accuracy", "0.532", None),
+            ("FPL XGBoost MAE", "0.926", None),
+            ("FPL XGBoost R2", "0.334", None),
+        ]
+    )
 
     st.markdown("### Data Sources")
     st.write("- FPL Official API: players, prices, availability, fixtures, gameweek history")
