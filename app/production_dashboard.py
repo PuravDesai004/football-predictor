@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+from html import escape
 from pathlib import Path
 from typing import Any
 
@@ -79,6 +80,229 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="collapsed",
 )
+
+
+def inject_css() -> None:
+    st.markdown(
+        """
+        <style>
+        :root {
+            --bg: #07111d;
+            --panel: #0d1724;
+            --panel-2: #111d2c;
+            --border: rgba(148, 163, 184, 0.18);
+            --muted: #94a3b8;
+            --text: #f8fafc;
+            --blue: #38bdf8;
+            --green: #34d399;
+            --amber: #fbbf24;
+            --red: #fb7185;
+        }
+        .stApp {
+            background:
+                linear-gradient(180deg, #07111d 0%, #0a1320 52%, #07111d 100%);
+            color: var(--text);
+        }
+        .block-container {
+            max-width: 1480px;
+            padding-top: 2rem;
+            padding-bottom: 4rem;
+        }
+        header[data-testid="stHeader"] {
+            background: rgba(7, 17, 29, 0.88);
+            border-bottom: 1px solid rgba(148, 163, 184, 0.14);
+        }
+        div[data-testid="stTabs"] button {
+            color: #cbd5e1;
+            font-weight: 700;
+        }
+        div[data-testid="stTabs"] button[aria-selected="true"] {
+            color: #ffffff;
+        }
+        div[data-testid="stTabs"] [data-baseweb="tab-highlight"] {
+            background-color: var(--blue);
+        }
+        h1, h2, h3 {
+            letter-spacing: 0;
+        }
+        div[data-testid="stDataFrame"] {
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            overflow: hidden;
+        }
+        .fp-hero {
+            border: 1px solid rgba(56, 189, 248, 0.20);
+            background: linear-gradient(135deg, rgba(13, 23, 36, 0.96), rgba(17, 29, 44, 0.92));
+            border-radius: 14px;
+            padding: 1.35rem 1.45rem;
+            margin-bottom: 1.2rem;
+            box-shadow: 0 18px 50px rgba(0, 0, 0, 0.25);
+        }
+        .fp-hero-top {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+        .fp-eyebrow {
+            color: var(--blue);
+            font-size: 0.78rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            margin-bottom: 0.45rem;
+        }
+        .fp-title {
+            margin: 0;
+            font-size: clamp(1.7rem, 3vw, 2.45rem);
+            line-height: 1.08;
+            font-weight: 850;
+            letter-spacing: 0;
+        }
+        .fp-subtitle {
+            max-width: 880px;
+            color: #cbd5e1;
+            margin-top: 0.65rem;
+            font-size: 0.98rem;
+            line-height: 1.55;
+        }
+        .fp-status-row {
+            display: flex;
+            gap: 0.55rem;
+            align-items: center;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+        }
+        .fp-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 0.85rem;
+            margin: 1rem 0 1.25rem;
+        }
+        .fp-grid-3 {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+        .fp-card {
+            background: rgba(13, 23, 36, 0.92);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1rem;
+            min-height: 106px;
+        }
+        .fp-card-label {
+            color: var(--muted);
+            font-size: 0.78rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            margin-bottom: 0.55rem;
+        }
+        .fp-card-value {
+            color: var(--text);
+            font-size: 1.6rem;
+            font-weight: 850;
+            line-height: 1.1;
+            overflow-wrap: anywhere;
+        }
+        .fp-card-detail {
+            color: #aebdd0;
+            font-size: 0.86rem;
+            margin-top: 0.55rem;
+            line-height: 1.35;
+            overflow-wrap: anywhere;
+        }
+        .fp-section {
+            display: flex;
+            align-items: flex-end;
+            justify-content: space-between;
+            gap: 1rem;
+            margin: 1.8rem 0 0.8rem;
+            padding-bottom: 0.55rem;
+            border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+        }
+        .fp-section h2 {
+            font-size: 1.25rem;
+            margin: 0;
+        }
+        .fp-section p {
+            color: var(--muted);
+            margin: 0;
+            font-size: 0.9rem;
+        }
+        .fp-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            border-radius: 999px;
+            padding: 0.34rem 0.72rem;
+            font-size: 0.78rem;
+            font-weight: 800;
+            border: 1px solid transparent;
+            white-space: nowrap;
+        }
+        .fp-pill-success {
+            color: #bbf7d0;
+            background: rgba(34, 197, 94, 0.13);
+            border-color: rgba(34, 197, 94, 0.32);
+        }
+        .fp-pill-warning {
+            color: #fde68a;
+            background: rgba(245, 158, 11, 0.13);
+            border-color: rgba(245, 158, 11, 0.32);
+        }
+        .fp-pill-muted {
+            color: #cbd5e1;
+            background: rgba(148, 163, 184, 0.12);
+            border-color: rgba(148, 163, 184, 0.24);
+        }
+        .fp-pill-danger {
+            color: #fecdd3;
+            background: rgba(244, 63, 94, 0.13);
+            border-color: rgba(244, 63, 94, 0.32);
+        }
+        .fp-alert {
+            border: 1px solid rgba(245, 158, 11, 0.30);
+            background: rgba(245, 158, 11, 0.10);
+            color: #fde68a;
+            border-radius: 12px;
+            padding: 0.95rem 1rem;
+            margin: 1rem 0;
+            font-weight: 650;
+        }
+        .fp-muted-box {
+            border: 1px dashed rgba(148, 163, 184, 0.24);
+            background: rgba(15, 23, 42, 0.56);
+            border-radius: 12px;
+            padding: 1.2rem;
+            color: #cbd5e1;
+        }
+        .fp-code-note {
+            color: var(--muted);
+            font-size: 0.88rem;
+            margin-bottom: 0.7rem;
+        }
+        @media (max-width: 1100px) {
+            .fp-grid, .fp-grid-3 {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+        }
+        @media (max-width: 700px) {
+            .block-container {
+                padding-left: 1rem;
+                padding-right: 1rem;
+            }
+            .fp-grid, .fp-grid-3 {
+                grid-template-columns: 1fr;
+            }
+            .fp-status-row {
+                justify-content: flex-start;
+            }
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 @st.cache_resource
@@ -282,30 +506,124 @@ def check_artifacts():
 
 def render_status_badge(status):
     normalized = str(status or "unknown").lower()
-    color = {
-        "success": "#16803c",
-        "passed": "#16803c",
-        "available": "#16803c",
-        "partial": "#9a6700",
-        "skipped": "#57606a",
-        "unavailable": "#9a6700",
-        "failed": "#cf222e",
-        "error": "#cf222e",
-        "missing": "#cf222e",
-        "unknown": "#57606a",
-    }.get(normalized, "#57606a")
+    st.markdown(status_badge_html(normalized), unsafe_allow_html=True)
+
+
+def status_badge_html(status, label: str | None = None) -> str:
+    normalized = str(status or "unknown").lower()
+    css_class = {
+        "success": "fp-pill-success",
+        "passed": "fp-pill-success",
+        "available": "fp-pill-success",
+        "db connected": "fp-pill-success",
+        "artifacts ready": "fp-pill-success",
+        "db unavailable": "fp-pill-warning",
+        "artifacts missing": "fp-pill-danger",
+        "ready": "fp-pill-success",
+        "partial": "fp-pill-warning",
+        "waiting for fixtures": "fp-pill-warning",
+        "skipped": "fp-pill-muted",
+        "unavailable": "fp-pill-warning",
+        "failed": "fp-pill-danger",
+        "error": "fp-pill-danger",
+        "missing": "fp-pill-danger",
+        "unknown": "fp-pill-muted",
+    }.get(normalized, "fp-pill-muted")
+    display = label if label is not None else normalized
+    return f"<span class='fp-pill {css_class}'>{escape(display)}</span>"
+
+
+def render_metric_card(label, value, help_text=None):
+    detail = f"<div class='fp-card-detail'>{escape(str(help_text))}</div>" if help_text else ""
     st.markdown(
         (
-            f"<span style='display:inline-block;padding:0.18rem 0.55rem;"
-            f"border-radius:999px;background:{color};color:white;"
-            f"font-size:0.82rem;font-weight:600;'>{normalized}</span>"
+            "<div class='fp-card'>"
+            f"<div class='fp-card-label'>{escape(str(label))}</div>"
+            f"<div class='fp-card-value'>{escape('-' if value is None else str(value))}</div>"
+            f"{detail}"
+            "</div>"
         ),
         unsafe_allow_html=True,
     )
 
 
-def render_metric_card(label, value, help_text=None):
-    st.metric(label=label, value="-" if value is None else value, help=help_text)
+def render_card_grid(cards: list[dict[str, Any]], columns: int = 4) -> None:
+    grid_class = "fp-grid fp-grid-3" if columns == 3 else "fp-grid"
+    html_parts = [f"<div class='{grid_class}'>"]
+    for card in cards:
+        status_html = card.get("status_html", "")
+        detail = card.get("detail", "")
+        html_parts.append(
+            "<div class='fp-card'>"
+            f"<div class='fp-card-label'>{escape(str(card.get('label', '')))}</div>"
+            f"<div class='fp-card-value'>{escape(str(card.get('value', '-')))}</div>"
+            f"{status_html}"
+            f"<div class='fp-card-detail'>{escape(str(detail))}</div>"
+            "</div>"
+        )
+    html_parts.append("</div>")
+    st.markdown("".join(html_parts), unsafe_allow_html=True)
+
+
+def render_section(title: str, caption: str = "") -> None:
+    caption_html = f"<p>{escape(caption)}</p>" if caption else ""
+    st.markdown(
+        f"<div class='fp-section'><h2>{escape(title)}</h2>{caption_html}</div>",
+        unsafe_allow_html=True,
+    )
+
+
+def render_empty_state(title: str, detail: str) -> None:
+    st.markdown(
+        (
+            "<div class='fp-muted-box'>"
+            f"<strong>{escape(title)}</strong><br>"
+            f"<span>{escape(detail)}</span>"
+            "</div>"
+        ),
+        unsafe_allow_html=True,
+    )
+
+
+def render_run_card(title: str, row: dict[str, Any], id_key: str) -> None:
+    status = row.get("run_status", row.get("status", "unknown"))
+    run_id = row.get(id_key, "-")
+    started_at = row.get("started_at") or row.get("created_at") or row.get("prediction_created_at")
+    completed_at = row.get("completed_at") or row.get("finished_at") or row.get("updated_at")
+    detail = []
+    if started_at:
+        detail.append(f"started: {_format_value(started_at)}")
+    if completed_at:
+        detail.append(f"updated: {_format_value(completed_at)}")
+    if row.get("error_message"):
+        detail.append(f"error: {row.get('error_message')}")
+    render_card_grid(
+        [
+            {
+                "label": title,
+                "value": f"#{run_id}",
+                "status_html": status_badge_html(status),
+                "detail": " | ".join(detail) if detail else "latest run metadata",
+            }
+        ],
+        columns=3,
+    )
+    with st.expander(f"{title} details", expanded=False):
+        st.json(_compact_mapping(row), expanded=False)
+
+
+def render_alert(message: str) -> None:
+    st.markdown(f"<div class='fp-alert'>{escape(message)}</div>", unsafe_allow_html=True)
+
+
+def format_bool(value: bool) -> str:
+    return "available" if value else "missing"
+
+
+def _format_value(value: Any) -> str:
+    if hasattr(value, "isoformat"):
+        return value.isoformat()
+    return str(value)
 
 
 def load_markdown_file(path):
@@ -319,8 +637,7 @@ def load_markdown_file(path):
 
 
 def main() -> None:
-    st.title("Production Premier League Model Dashboard")
-    st.caption("Read-only local dashboard for production model and weekly pipeline status.")
+    inject_css()
 
     conn = get_db_connection()
     artifact_results = check_artifacts()
@@ -331,8 +648,10 @@ def main() -> None:
     predictions_df = load_prediction_rows(conn)
     health_df = load_health_logs(conn)
 
+    render_hero(conn, artifact_results, counts)
+
     if conn is None:
-        st.error("Database connection unavailable. Check local environment configuration.")
+        render_alert("Database connection unavailable. Artifact checks still work, but live production tables cannot be read.")
 
     tabs = st.tabs(
         [
@@ -364,20 +683,60 @@ def main() -> None:
         render_how_to_run()
 
 
-def render_overview(artifact_results, counts, freshness_df) -> None:
-    st.subheader("Production Overview")
-    cols = st.columns(4)
-    with cols[0]:
-        render_metric_card("Model", MODEL_NAME)
-    with cols[1]:
-        render_metric_card("Training Seasons", TRAINING_SEASONS)
-    with cols[2]:
-        render_metric_card("Feature Count", EXPECTED_FEATURE_COUNT)
-    with cols[3]:
-        render_metric_card("Draw Threshold", f"{EXPECTED_DRAW_THRESHOLD:.2f}")
+def render_hero(conn, artifact_results, counts) -> None:
+    db_status = "db connected" if conn is not None else "db unavailable"
+    artifact_status = "artifacts ready" if all(result["exists"] for result in artifact_results.values()) else "artifacts missing"
+    prediction_count = counts.get("Predictions")
+    prediction_status = "ready" if prediction_count and prediction_count > 0 else "waiting for fixtures"
+    st.markdown(
+        (
+            "<div class='fp-hero'>"
+            "<div class='fp-hero-top'>"
+            "<div>"
+            "<div class='fp-eyebrow'>Tier 3 production console</div>"
+            "<h1 class='fp-title'>Premier League model control room</h1>"
+            "<div class='fp-subtitle'>Read-only view for the production logistic Elo model, weekly ingestion pipeline, prediction tables, and final validation reports.</div>"
+            "</div>"
+            "<div class='fp-status-row'>"
+            f"{status_badge_html(db_status)}"
+            f"{status_badge_html(artifact_status)}"
+            f"{status_badge_html(prediction_status)}"
+            "</div>"
+            "</div>"
+            "</div>"
+        ),
+        unsafe_allow_html=True,
+    )
 
-    st.divider()
-    st.subheader("Artifact Checks")
+
+def render_overview(artifact_results, counts, freshness_df) -> None:
+    render_section("Production Overview", "Frozen production model configuration and local artifact health.")
+    render_card_grid(
+        [
+            {
+                "label": "Model",
+                "value": "Logistic Elo v3",
+                "detail": f"Artifact: {MODEL_NAME}",
+            },
+            {
+                "label": "Training Seasons",
+                "value": "2021-22 - 2025-26",
+                "detail": "Production fit includes the former 2025-26 holdout.",
+            },
+            {
+                "label": "Feature Count",
+                "value": EXPECTED_FEATURE_COUNT,
+                "detail": "Base rolling features plus pre-match Elo.",
+            },
+            {
+                "label": "Draw Threshold",
+                "value": f"{EXPECTED_DRAW_THRESHOLD:.2f}",
+                "detail": "Optional hard-label draw-risk helper.",
+            },
+        ]
+    )
+
+    render_section("Artifact Checks", "Production artifacts are local-only and ignored by Git.")
     artifact_rows = []
     for label, result in artifact_results.items():
         artifact_rows.append(
@@ -388,55 +747,67 @@ def render_overview(artifact_results, counts, freshness_df) -> None:
                 "details": result["details"],
             }
         )
-    st.dataframe(pd.DataFrame(artifact_rows), use_container_width=True, hide_index=True)
+    artifact_cards = [
+        {
+            "label": row["artifact"],
+            "value": row["exists"],
+            "status_html": status_badge_html(format_bool(row["exists"] == "yes")),
+            "detail": f"{row['details'] or 'artifact file'} | {row['path']}",
+        }
+        for row in artifact_rows
+    ]
+    render_card_grid(artifact_cards)
     if not all(result["exists"] for result in artifact_results.values()):
-        st.error("One or more production artifacts are missing.")
+        render_alert("One or more production artifacts are missing.")
 
-    count_cols = st.columns(4)
-    for index, (label, value) in enumerate(counts.items()):
-        with count_cols[index]:
-            render_metric_card(label, value)
+    render_section("Live Production Tables", "Counts from local production tables when PostgreSQL is reachable.")
+    render_card_grid(
+        [
+            {
+                "label": label,
+                "value": "-" if value is None else value,
+                "detail": "table unavailable" if value is None else "rows currently available",
+            }
+            for label, value in counts.items()
+        ]
+    )
 
     if counts.get("Predictions") == 0:
-        st.warning(
+        render_alert(
             "No production predictions yet. Run the weekly pipeline after upcoming fixtures are available."
         )
 
     if _freshness_has_warning(freshness_df):
-        st.warning("One or more production data sources are stale or unavailable.")
+        render_alert("One or more production data sources are stale or unavailable.")
 
 
 def render_pipeline_status(latest_ingestion, latest_prediction, freshness_df, counts) -> None:
-    st.subheader("Pipeline Status")
+    render_section("Pipeline Status", "Latest ingestion, prediction, and freshness state.")
     left, right = st.columns(2)
 
     with left:
-        st.markdown("**Latest ingestion run**")
         if latest_ingestion:
-            render_status_badge(latest_ingestion.get("run_status"))
-            st.json(_compact_mapping(latest_ingestion), expanded=False)
+            render_run_card("Latest ingestion run", latest_ingestion, "run_id")
         else:
-            st.info("No ingestion runs found.")
+            render_empty_state("No ingestion runs found", "Run the weekly pipeline after sources are available.")
 
     with right:
-        st.markdown("**Latest prediction run**")
         if latest_prediction:
-            render_status_badge(latest_prediction.get("run_status"))
-            st.json(_compact_mapping(latest_prediction), expanded=False)
+            render_run_card("Latest prediction run", latest_prediction, "prediction_run_id")
         else:
-            st.info("No prediction runs found.")
+            render_empty_state("No prediction runs found", "Predictions will appear after upcoming feature rows exist.")
 
-    st.subheader("Data Freshness")
+    render_section("Data Freshness", "Source snapshots and latest source errors.")
     if freshness_df.empty:
-        st.info("No data freshness rows found.")
+        render_empty_state("No freshness rows found", "The ingestion foundation is present, but no source freshness rows were returned.")
     else:
         freshness_display = freshness_df.copy()
         st.dataframe(freshness_display, use_container_width=True, hide_index=True)
         for row in freshness_df.to_dict(orient="records"):
             if row.get("latest_error_message"):
-                st.warning(f"{row['source_name']}: {row['latest_error_message']}")
+                render_alert(f"{row['source_name']}: {row['latest_error_message']}")
 
-    st.subheader("Derived pipeline state")
+    render_section("Derived Pipeline State", "Readable summary of the pipeline gates.")
     status_rows = [
         {
             "area": "FPL snapshots",
@@ -463,10 +834,11 @@ def render_pipeline_status(latest_ingestion, latest_prediction, freshness_df, co
 
 
 def render_predictions(predictions_df) -> None:
-    st.subheader("Production Predictions")
+    render_section("Production Predictions", "Upcoming matches scored by the frozen production model.")
     if predictions_df.empty:
-        st.info(
-            "No production predictions yet. Run the weekly pipeline after upcoming fixtures are available."
+        render_empty_state(
+            "No predictions yet",
+            "Run the weekly pipeline after 2026-27 upcoming fixtures are available. The app will not create fake fixtures.",
         )
         return
 
@@ -479,17 +851,21 @@ def render_predictions(predictions_df) -> None:
 
 
 def render_model_health(health_df) -> None:
-    st.subheader("Final Tier 3 Holdout Metrics")
-    argmax_cols = st.columns(4)
-    for index, (label, value) in enumerate(HOLDOUT_ARGMAX.items()):
-        with argmax_cols[index]:
-            render_metric_card(f"Argmax {label}", value)
-    overlay_cols = st.columns(4)
-    for index, (label, value) in enumerate(HOLDOUT_OVERLAY.items()):
-        with overlay_cols[index]:
-            render_metric_card(f"Overlay {label}", value)
+    render_section("Final Tier 3 Holdout Metrics", "Official frozen evaluation before the production refit.")
+    render_card_grid(
+        [
+            {"label": f"Argmax {label}", "value": value, "detail": "final 2025-26 holdout"}
+            for label, value in HOLDOUT_ARGMAX.items()
+        ]
+    )
+    render_card_grid(
+        [
+            {"label": f"Overlay {label}", "value": value, "detail": "hard-label helper only"}
+            for label, value in HOLDOUT_OVERLAY.items()
+        ]
+    )
 
-    st.warning(
+    render_alert(
         "Known final-holdout weakness: draw underprediction, home bias, and high-confidence wrong predictions."
     )
 
@@ -502,15 +878,18 @@ def render_model_health(health_df) -> None:
     ).reset_index(names="class")
     st.dataframe(distribution_df, use_container_width=True, hide_index=True)
 
-    st.subheader("Production Health Logs")
+    render_section("Production Health Logs", "Weekly scoring will populate this after predictions meet completed results.")
     if health_df.empty:
-        st.info("No production model health logs yet. Scoring will populate this after predictions meet completed results.")
+        render_empty_state(
+            "No health logs yet",
+            "This is expected until there are production predictions and completed match results to score.",
+        )
         return
     st.dataframe(health_df, use_container_width=True, hide_index=True)
 
 
 def render_reports() -> None:
-    st.subheader("Tier 3 Reports")
+    render_section("Tier 3 Reports", "Research notes, final holdout report, and error analysis.")
     for title, path in REPORTS.items():
         with st.expander(title, expanded=False):
             markdown = load_markdown_file(path)
@@ -521,7 +900,7 @@ def render_reports() -> None:
 
 
 def render_how_to_run() -> None:
-    st.subheader("Local Commands")
+    render_section("Local Commands", "Run these from the project root in the active Python environment.")
     commands = [
         "python src/production/run_weekly_pipeline.py --target-season 2026-27",
         "python src/production/weekly_ingest.py --target-season 2026-27",
@@ -529,9 +908,12 @@ def render_how_to_run() -> None:
         "python src/production/predict_production_matches.py --target-season 2026-27",
         "python src/production/score_predictions.py --target-season 2026-27",
     ]
+    st.markdown(
+        "<div class='fp-code-note'>The dashboard is read-only. It shows pipeline state but does not execute pipeline jobs.</div>",
+        unsafe_allow_html=True,
+    )
     for command in commands:
         st.code(command, language="powershell")
-    st.info("This dashboard is read-only. It does not run the weekly pipeline automatically.")
 
 
 def _read_dataframe(conn, table_name: str, query: str) -> pd.DataFrame:
