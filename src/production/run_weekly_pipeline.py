@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -14,11 +15,16 @@ DEFAULT_TARGET_SEASON = "2026-27"
 PYTHON_EXECUTABLE = sys.executable
 PRODUCTION_SCRIPTS = {
     "ingest": PROJECT_ROOT / "src" / "production" / "weekly_ingest.py",
+    "fpl_history": PROJECT_ROOT / "src" / "production" / "ingest_fpl_gameweek_v3.py",
     "build_features": PROJECT_ROOT / "src" / "production" / "build_upcoming_features.py",
     "predict": PROJECT_ROOT / "src" / "production" / "predict_production_matches.py",
     "score": PROJECT_ROOT / "src" / "production" / "score_predictions.py",
+    "fpl_predictions": PROJECT_ROOT / "src" / "production" / "run_fpl_predictions_v3.py",
 }
-PIPELINE_STAGES = ["ingest", "build_features", "predict", "score"]
+PIPELINE_STAGES = ["ingest", "fpl_history", "build_features", "predict", "score", "fpl_predictions"]
+DEFAULT_FPL_ARTIFACT_DIR = Path(
+    os.getenv("FPL_V3_ARTIFACT_DIR", str(PROJECT_ROOT / "data" / "production_artifacts"))
+)
 
 SRC_DIR = PROJECT_ROOT / "src"
 if str(SRC_DIR) not in sys.path:
@@ -33,6 +39,12 @@ SKIP_TOKENS = [
     "DRY_RUN_NO_PREDICTIONS_WRITTEN",
     "Upcoming fixtures found: 0",
     "Wrote 0 upcoming feature rows",
+    "SKIPPED_FPL_ARTIFACT_UNAVAILABLE",
+    "SKIPPED_NO_UPCOMING_FIXTURES",
+    "SKIPPED_STALE_FIXTURE_SNAPSHOT",
+    "SKIPPED_NO_COMPLETED_GAMEWEEK",
+    "SKIPPED_NO_FPL_SNAPSHOTS",
+    "SKIPPED_FPL_LIVE_UNAVAILABLE",
 ]
 
 
@@ -89,6 +101,11 @@ def run_build_features(target_season, target_gameweek=None, replace=False) -> di
     return run_command(command, "build_features")
 
 
+def run_fpl_history(target_season, target_gameweek=None) -> dict:
+    command = _base_command("fpl_history", target_season, target_gameweek)
+    return run_command(command, "fpl_history")
+
+
 def run_predict(target_season, target_gameweek=None) -> dict:
     command = _base_command("predict", target_season, target_gameweek)
     return run_command(command, "predict")
@@ -97,6 +114,21 @@ def run_predict(target_season, target_gameweek=None) -> dict:
 def run_score(target_season, target_gameweek=None) -> dict:
     command = _base_command("score", target_season, target_gameweek)
     return run_command(command, "score")
+
+
+def run_fpl_predictions(target_season, target_gameweek=None, artifact_dir=None, dry_run=False) -> dict:
+    artifact_dir = Path(artifact_dir or DEFAULT_FPL_ARTIFACT_DIR)
+    model_path = artifact_dir / "fpl_points_v3_candidate.pkl"
+    features_path = artifact_dir / "fpl_points_v3_candidate_features.json"
+    if not model_path.exists() or not features_path.exists():
+        reason = f"SKIPPED_FPL_ARTIFACT_UNAVAILABLE: {artifact_dir}"
+        print(reason)
+        return _stage_result("fpl_predictions", "skipped", reason)
+    command = _base_command("fpl_predictions", target_season, target_gameweek)
+    command.extend(["--artifact-dir", str(artifact_dir)])
+    if dry_run:
+        command.append("--dry-run")
+    return run_command(command, "fpl_predictions")
 
 
 def get_db_connection():
@@ -165,6 +197,24 @@ def load_pipeline_status(conn, target_season, target_gameweek=None) -> dict:
             target_season,
             target_gameweek,
         )
+        status["fpl_prediction_row_count"] = _count_rows(
+            db_conn,
+            "fpl_player_predictions_v3",
+            target_season,
+            target_gameweek,
+        )
+        status["fpl_optimizer_row_count"] = _count_rows(
+            db_conn,
+            "fpl_optimizer_outputs_v3",
+            target_season,
+            target_gameweek,
+        )
+        status["fpl_gameweek_snapshot_row_count"] = _count_rows(
+            db_conn,
+            "production_fpl_gameweek_snapshots_v3",
+            target_season,
+            target_gameweek,
+        )
     return status
 
 
@@ -220,6 +270,9 @@ def print_pipeline_summary(stage_results, status) -> None:
     print(f"Unscored prediction count: {status.get('unscored_prediction_count')}")
     print(f"Scored prediction count: {status.get('scored_prediction_count')}")
     print(f"Model health log row count: {status.get('model_health_log_row_count')}")
+    print(f"FPL prediction row count: {status.get('fpl_prediction_row_count')}")
+    print(f"FPL optimizer row count: {status.get('fpl_optimizer_row_count')}")
+    print(f"FPL gameweek snapshot row count: {status.get('fpl_gameweek_snapshot_row_count')}")
     print("Latest scoring status:")
     if latest_health:
         print(
@@ -249,6 +302,16 @@ def main() -> None:
         if stage_results["ingest"]["status"] == "failed":
             _finish_failed(stage_results, args)
 
+    if args.skip_fpl_history:
+        stage_results["fpl_history"] = _skipped_stage("fpl_history", "SKIPPED_BY_CLI")
+    else:
+        stage_results["fpl_history"] = run_fpl_history(
+            args.target_season,
+            target_gameweek=args.target_gameweek,
+        )
+        if stage_results["fpl_history"]["status"] == "failed":
+            _finish_failed(stage_results, args)
+
     if args.skip_build_features:
         stage_results["build_features"] = _skipped_stage(
             "build_features",
@@ -270,7 +333,7 @@ def main() -> None:
             args.target_season,
             target_gameweek=args.target_gameweek,
         )
-        if stage_results["predict"]["status"] == "failed":
+    if stage_results["predict"]["status"] == "failed":
             _finish_failed(stage_results, args)
 
     if args.skip_score:
@@ -280,7 +343,21 @@ def main() -> None:
             args.target_season,
             target_gameweek=args.target_gameweek,
         )
-        if stage_results["score"]["status"] == "failed":
+    if stage_results["score"]["status"] == "failed":
+            _finish_failed(stage_results, args)
+
+    if args.skip_fpl_predictions:
+        stage_results["fpl_predictions"] = _skipped_stage(
+            "fpl_predictions", "SKIPPED_BY_CLI"
+        )
+    else:
+        stage_results["fpl_predictions"] = run_fpl_predictions(
+            args.target_season,
+            target_gameweek=args.target_gameweek,
+            artifact_dir=args.fpl_artifact_dir,
+            dry_run=args.dry_run_fpl,
+        )
+        if stage_results["fpl_predictions"]["status"] == "failed":
             _finish_failed(stage_results, args)
 
     final_status = _final_pipeline_status(stage_results)
@@ -300,13 +377,21 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--target-season", default=DEFAULT_TARGET_SEASON)
     parser.add_argument("--target-gameweek", type=int, default=None)
     parser.add_argument("--skip-ingest", action="store_true")
+    parser.add_argument("--skip-fpl-history", action="store_true")
     parser.add_argument("--skip-build-features", action="store_true")
     parser.add_argument("--skip-predict", action="store_true")
     parser.add_argument("--skip-score", action="store_true")
+    parser.add_argument("--skip-fpl-predictions", action="store_true")
     parser.add_argument("--skip-fpl", action="store_true")
     parser.add_argument("--skip-football-data", action="store_true")
     parser.add_argument("--skip-understat", action="store_true")
     parser.add_argument("--replace-features", action="store_true")
+    parser.add_argument(
+        "--fpl-artifact-dir",
+        type=Path,
+        default=DEFAULT_FPL_ARTIFACT_DIR,
+    )
+    parser.add_argument("--dry-run-fpl", action="store_true")
     return parser.parse_args()
 
 

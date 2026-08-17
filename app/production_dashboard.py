@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import json
 import os
+import re
+import subprocess
 import sys
+from datetime import datetime, timedelta, timezone
 from html import escape
 from pathlib import Path
 from typing import Any
@@ -58,6 +61,19 @@ PRODUCTION_TABLES = [
     "production_model_health_log",
     "elo_current_v3",
 ]
+FPL_PREDICTION_TABLE = "fpl_player_predictions_v3"
+FPL_OPTIMIZER_TABLE = "fpl_optimizer_outputs_v3"
+FPL_SNAPSHOT_TABLE = "production_fpl_gameweek_snapshots_v3"
+FPL_TEAM_MAPPING_TABLE = "production_team_name_mapping"
+FPL_POSITION_NAMES = {
+    1: "Goalkeeper",
+    2: "Defender",
+    3: "Midfielder",
+    4: "Forward",
+}
+PIPELINE_TIMEOUT_SECONDS = 600
+PIPELINE_DEADLINE_GUARD_HOURS = 4
+FPL_SNAPSHOT_STALE_HOURS = 48
 HOLDOUT_ARGMAX = {
     "Accuracy": "0.4868",
     "Log Loss": "1.0601",
@@ -423,6 +439,129 @@ def load_prediction_rows(conn):
     return _read_dataframe(conn, "production_match_predictions", query)
 
 
+def load_fpl_prediction_rows(conn):
+    if conn is None:
+        return pd.DataFrame()
+    query = f"""
+        WITH latest_target AS (
+            SELECT target_season, target_gameweek
+            FROM {FPL_PREDICTION_TABLE}
+            GROUP BY target_season, target_gameweek
+            ORDER BY MAX(created_at) DESC NULLS LAST,
+                     target_season DESC,
+                     target_gameweek DESC
+            LIMIT 1
+        )
+        SELECT
+            p.prediction_id,
+            p.target_season,
+            p.target_gameweek,
+            p.player_id,
+            p.player_name,
+            p.team_name,
+            p.position_id,
+            p.predicted_points,
+            p.availability_factor,
+            p.expected_points,
+            p.status,
+            p.chance_of_playing,
+            p.created_at
+        FROM {FPL_PREDICTION_TABLE} p
+        INNER JOIN latest_target t
+            ON p.target_season = t.target_season
+            AND p.target_gameweek = t.target_gameweek
+        ORDER BY p.expected_points DESC, p.player_name, p.player_id
+    """
+    return _read_dataframe(conn, FPL_PREDICTION_TABLE, query)
+
+
+def load_latest_fpl_optimizer(conn) -> dict[str, Any] | None:
+    if conn is None:
+        return None
+    query = f"""
+        SELECT
+            target_season,
+            target_gameweek,
+            generated_at,
+            budget_limit,
+            squad_cost,
+            squad_json,
+            starting_xi_json,
+            captain_player_id,
+            vice_captain_player_id,
+            objective_value,
+            source_prediction_count
+        FROM {FPL_OPTIMIZER_TABLE}
+        ORDER BY generated_at DESC NULLS LAST,
+                 target_season DESC,
+                 target_gameweek DESC
+        LIMIT 1
+    """
+    optimizer_df = _read_dataframe(conn, FPL_OPTIMIZER_TABLE, query)
+    if optimizer_df.empty:
+        return None
+    return optimizer_df.iloc[0].to_dict()
+
+
+def load_fpl_snapshot_status(conn):
+    if conn is None:
+        return pd.DataFrame()
+    query = f"""
+        SELECT
+            target_season,
+            gameweek,
+            COUNT(*) AS player_rows,
+            MAX(snapshot_time) AS snapshot_time
+        FROM {FPL_SNAPSHOT_TABLE}
+        GROUP BY target_season, gameweek
+        ORDER BY target_season DESC, gameweek DESC
+    """
+    return _read_dataframe(conn, FPL_SNAPSHOT_TABLE, query)
+
+
+def load_fpl_cold_start_teams(conn) -> list[str]:
+    if conn is None:
+        return []
+    query = f"""
+        SELECT DISTINCT fpl_team_name
+        FROM {FPL_TEAM_MAPPING_TABLE}
+        WHERE is_active = TRUE
+          AND source LIKE '%:new_team_cold_start'
+        ORDER BY fpl_team_name
+    """
+    mapping_df = _read_dataframe(conn, FPL_TEAM_MAPPING_TABLE, query)
+    if mapping_df.empty or "fpl_team_name" not in mapping_df:
+        return []
+    return [
+        str(team_name)
+        for team_name in mapping_df["fpl_team_name"].dropna().tolist()
+    ]
+
+
+def load_latest_fpl_bootstrap_deadline(conn) -> dict[str, Any] | None:
+    if conn is None:
+        return None
+    query = """
+        SELECT
+            run_id,
+            MAX(deadline_time) AS latest_deadline,
+            MAX(snapshot_time) AS latest_snapshot_time,
+            COUNT(*) AS snapshot_rows
+        FROM production_fpl_bootstrap_snapshots
+        GROUP BY run_id
+        ORDER BY run_id DESC
+        LIMIT 1
+    """
+    deadline_df = _read_dataframe(
+        conn,
+        "production_fpl_bootstrap_snapshots",
+        query,
+    )
+    if deadline_df.empty:
+        return None
+    return deadline_df.iloc[0].to_dict()
+
+
 def load_health_logs(conn):
     if conn is None:
         return pd.DataFrame()
@@ -636,6 +775,274 @@ def load_markdown_file(path):
         return ""
 
 
+def render_operator_controls(conn, latest_fpl_deadline: dict[str, Any] | None) -> None:
+    st.session_state.setdefault("pipeline_active", False)
+    render_section(
+        "Operator Controls",
+        "Read-only refresh and guarded weekly pipeline execution.",
+    )
+
+    reasons = _pipeline_guard_reasons(conn, latest_fpl_deadline)
+    control_left, control_right = st.columns([1, 2])
+    with control_left:
+        if st.button("Refresh Dashboard", key="refresh_dashboard_button"):
+            st.rerun()
+
+    with control_right:
+        _render_pipeline_deadline(latest_fpl_deadline)
+        if reasons:
+            render_alert("Pipeline blocked: " + " ".join(reasons))
+        else:
+            st.success("Pipeline guard passed. The weekly pipeline is ready to run.")
+
+        if st.button(
+            "Run Weekly Pipeline",
+            key="run_weekly_pipeline_button",
+            disabled=bool(reasons),
+        ):
+            result = _execute_weekly_pipeline()
+            st.session_state["pipeline_result"] = result
+            st.rerun()
+
+    _render_pipeline_result(st.session_state.get("pipeline_result"))
+
+
+def _render_pipeline_deadline(deadline_info: dict[str, Any] | None) -> None:
+    if not deadline_info:
+        render_empty_state(
+            "Latest FPL deadline unavailable",
+            "The newest FPL bootstrap run has not returned a usable deadline.",
+        )
+        return
+
+    deadline = _coerce_utc_timestamp(deadline_info.get("latest_deadline"))
+    snapshot_time = _coerce_utc_timestamp(deadline_info.get("latest_snapshot_time"))
+    snapshot_age = _timestamp_age_text(snapshot_time)
+    render_card_grid(
+        [
+            {
+                "label": "Latest FPL deadline",
+                "value": _format_value(deadline) if deadline else "Unavailable",
+                "detail": f"bootstrap run #{deadline_info.get('run_id', '-')}",
+            },
+            {
+                "label": "Latest bootstrap snapshot",
+                "value": _format_value(snapshot_time) if snapshot_time else "Unavailable",
+                "detail": snapshot_age or "snapshot age unavailable",
+            },
+        ],
+        columns=3,
+    )
+
+
+def _pipeline_guard_reasons(
+    conn,
+    deadline_info: dict[str, Any] | None,
+) -> list[str]:
+    reasons: list[str] = []
+    if st.session_state.get("pipeline_active", False):
+        reasons.append("another pipeline run is active in this Streamlit session.")
+    if conn is None:
+        reasons.append("PostgreSQL is unavailable, so the latest FPL deadline cannot be verified.")
+        return reasons
+    if not deadline_info:
+        reasons.append("no deadline exists in the newest FPL bootstrap run.")
+        return reasons
+
+    now = pd.Timestamp.now(tz="UTC")
+    deadline = _coerce_utc_timestamp(deadline_info.get("latest_deadline"))
+    snapshot_time = _coerce_utc_timestamp(deadline_info.get("latest_snapshot_time"))
+    if deadline is None:
+        reasons.append("no deadline exists in the newest FPL bootstrap run.")
+    else:
+        remaining = deadline - now
+        if remaining <= pd.Timedelta(hours=PIPELINE_DEADLINE_GUARD_HOURS):
+            if remaining.total_seconds() < 0:
+                reasons.append(
+                    "the FPL deadline has passed "
+                    f"({_format_timedelta(-remaining)} ago; deadline {_format_value(deadline)})."
+                )
+            else:
+                reasons.append(
+                    "the FPL deadline is less than four hours away "
+                    f"({_format_timedelta(remaining)} remaining; deadline {_format_value(deadline)})."
+                )
+
+    if snapshot_time is None:
+        reasons.append("the latest FPL bootstrap snapshot has no timestamp and is treated as stale.")
+    elif now - snapshot_time > pd.Timedelta(hours=FPL_SNAPSHOT_STALE_HOURS):
+        reasons.append(
+            "the latest FPL bootstrap snapshot is clearly stale "
+            f"({_format_timedelta(now - snapshot_time)} old; threshold {FPL_SNAPSHOT_STALE_HOURS} hours)."
+        )
+    return reasons
+
+
+def _execute_weekly_pipeline() -> dict[str, Any]:
+    command = [
+        sys.executable,
+        str(PROJECT_ROOT / "src" / "production" / "run_weekly_pipeline.py"),
+        "--target-season",
+        TARGET_SEASON,
+        "--fpl-artifact-dir",
+        str(PROJECT_ROOT / "data" / "production_artifacts"),
+    ]
+    st.session_state["pipeline_active"] = True
+    result: dict[str, Any]
+    with st.status("Running weekly pipeline…", expanded=True) as status:
+        st.write("The guarded weekly pipeline is running. Dashboard queries will refresh when it finishes.")
+        try:
+            completed = subprocess.run(
+                command,
+                cwd=PROJECT_ROOT,
+                capture_output=True,
+                text=True,
+                timeout=PIPELINE_TIMEOUT_SECONDS,
+                check=False,
+            )
+            stdout = _redact_pipeline_output(completed.stdout)
+            stderr = _redact_pipeline_output(completed.stderr)
+            full_output = _combine_pipeline_output(stdout, stderr)
+            pipeline_status = _classify_pipeline_result(completed.returncode, full_output)
+            result = {
+                "status": pipeline_status,
+                "exit_code": completed.returncode,
+                "stdout": stdout,
+                "stderr": stderr,
+                "full_output": full_output,
+                "concise_output": _concise_pipeline_output(full_output),
+                "completed_at": datetime.now(timezone.utc),
+            }
+            status.update(
+                label=f"Weekly pipeline {pipeline_status}",
+                state="error" if pipeline_status == "failure" else "complete",
+                expanded=False,
+            )
+        except subprocess.TimeoutExpired as exc:
+            stdout = _redact_pipeline_output(_output_text(exc.stdout))
+            stderr = _redact_pipeline_output(_output_text(exc.stderr))
+            full_output = _combine_pipeline_output(stdout, stderr)
+            result = {
+                "status": "failure",
+                "exit_code": None,
+                "stdout": stdout,
+                "stderr": stderr,
+                "full_output": _combine_pipeline_output(
+                    full_output,
+                    f"Pipeline timed out after {PIPELINE_TIMEOUT_SECONDS} seconds.",
+                ),
+                "concise_output": _concise_pipeline_output(full_output),
+                "completed_at": datetime.now(timezone.utc),
+            }
+            status.update(label="Weekly pipeline failed: timeout", state="error", expanded=False)
+        except Exception as exc:
+            message = _redact_pipeline_output(str(exc))
+            result = {
+                "status": "failure",
+                "exit_code": None,
+                "stdout": "",
+                "stderr": message,
+                "full_output": message,
+                "concise_output": message,
+                "completed_at": datetime.now(timezone.utc),
+            }
+            status.update(label="Weekly pipeline failed", state="error", expanded=False)
+        finally:
+            st.session_state["pipeline_active"] = False
+    return result
+
+
+def _render_pipeline_result(result: dict[str, Any] | None) -> None:
+    if not result:
+        return
+    status = result.get("status", "failure")
+    if status == "success":
+        st.success("Weekly pipeline completed successfully.")
+    elif status == "partial":
+        st.warning("Weekly pipeline completed with skips or partial source status.")
+    else:
+        st.error("Weekly pipeline failed.")
+    st.caption(f"Pipeline state: {status} | Exit code: {result.get('exit_code', '-')}")
+    if result.get("concise_output"):
+        st.code(result["concise_output"], language="text")
+    with st.expander("Full pipeline output", expanded=False):
+        st.code(result.get("full_output") or "No output captured.", language="text")
+
+
+def _classify_pipeline_result(exit_code: int | None, output: str) -> str:
+    if exit_code not in (0, None):
+        return "failure"
+    normalized = output.lower()
+    if "completed_with_skips" in normalized or "run_status=partial" in normalized:
+        return "partial"
+    return "success"
+
+
+def _concise_pipeline_output(output: str, max_lines: int = 18, max_chars: int = 4000) -> str:
+    lines = [line.strip() for line in output.splitlines() if line.strip()]
+    concise = "\n".join(lines[-max_lines:])
+    if len(concise) > max_chars:
+        concise = concise[-max_chars:]
+    return concise
+
+
+def _combine_pipeline_output(stdout: str, stderr: str) -> str:
+    parts = []
+    if stdout.strip():
+        parts.append("STDOUT\n" + stdout.strip())
+    if stderr.strip():
+        parts.append("STDERR\n" + stderr.strip())
+    return "\n\n".join(parts)
+
+
+def _output_text(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, bytes):
+        return value.decode("utf-8", errors="replace")
+    return str(value)
+
+
+def _redact_pipeline_output(value: Any) -> str:
+    output = _output_text(value)
+    output = re.sub(
+        r"(?i)(postgres(?:ql)?(?:\+[^:/\s]+)?://)[^\s]+",
+        r"\1[redacted]",
+        output,
+    )
+    output = re.sub(
+        r"(?i)(password|passwd|pwd|secret|token|api[_-]?key)\s*[:=]\s*[^\s,;]+",
+        r"\1=[redacted]",
+        output,
+    )
+    return output
+
+
+def _coerce_utc_timestamp(value: Any) -> pd.Timestamp | None:
+    if value is None or pd.isna(value):
+        return None
+    timestamp = pd.to_datetime(value, errors="coerce", utc=True)
+    return None if pd.isna(timestamp) else timestamp
+
+
+def _timestamp_age_text(timestamp: pd.Timestamp | None) -> str | None:
+    if timestamp is None:
+        return None
+    age = pd.Timestamp.now(tz="UTC") - timestamp
+    if age.total_seconds() < 0:
+        return "snapshot timestamp is in the future"
+    return f"snapshot age: {_format_timedelta(age)}"
+
+
+def _format_timedelta(value: Any) -> str:
+    seconds = max(0, int(value.total_seconds()))
+    hours, remainder = divmod(seconds, 3600)
+    minutes = remainder // 60
+    if hours:
+        return f"{hours}h {minutes}m"
+    return f"{minutes}m"
+
+
 def main() -> None:
     inject_css()
 
@@ -646,9 +1053,16 @@ def main() -> None:
     latest_prediction = load_latest_prediction_run(conn)
     freshness_df = load_data_freshness(conn)
     predictions_df = load_prediction_rows(conn)
+    fpl_predictions_df = load_fpl_prediction_rows(conn)
+    fpl_optimizer_row = load_latest_fpl_optimizer(conn)
+    fpl_snapshot_df = load_fpl_snapshot_status(conn)
+    fpl_cold_start_teams = load_fpl_cold_start_teams(conn)
+    latest_fpl_deadline = load_latest_fpl_bootstrap_deadline(conn)
     health_df = load_health_logs(conn)
 
     render_hero(conn, artifact_results, counts)
+
+    render_operator_controls(conn, latest_fpl_deadline)
 
     if conn is None:
         render_alert("Database connection unavailable. Artifact checks still work, but live production tables cannot be read.")
@@ -658,6 +1072,7 @@ def main() -> None:
             "Overview",
             "Pipeline Status",
             "Predictions",
+            "FPL Predictions",
             "Model Health",
             "Reports",
             "How To Run",
@@ -674,12 +1089,22 @@ def main() -> None:
         render_predictions(predictions_df)
 
     with tabs[3]:
-        render_model_health(health_df)
+        render_fpl_predictions(
+            fpl_predictions_df,
+            fpl_optimizer_row,
+            fpl_snapshot_df,
+            latest_ingestion,
+            freshness_df,
+            fpl_cold_start_teams,
+        )
 
     with tabs[4]:
-        render_reports()
+        render_model_health(health_df)
 
     with tabs[5]:
+        render_reports()
+
+    with tabs[6]:
         render_how_to_run()
 
 
@@ -752,7 +1177,7 @@ def render_overview(artifact_results, counts, freshness_df) -> None:
             "label": row["artifact"],
             "value": row["exists"],
             "status_html": status_badge_html(format_bool(row["exists"] == "yes")),
-            "detail": f"{row['details'] or 'artifact file'} | {row['path']}",
+            "detail": row["details"] or "local artifact verified",
         }
         for row in artifact_rows
     ]
@@ -848,6 +1273,329 @@ def render_predictions(predictions_df) -> None:
         if column in display_df:
             display_df[column] = display_df[column].map(lambda value: f"{float(value):.3f}")
     st.dataframe(display_df, use_container_width=True, hide_index=True)
+
+
+def render_fpl_predictions(
+    fpl_predictions_df: pd.DataFrame,
+    optimizer_row: dict[str, Any] | None,
+    snapshot_df: pd.DataFrame,
+    latest_ingestion: dict[str, Any] | None,
+    freshness_df: pd.DataFrame,
+    cold_start_teams: list[str],
+) -> None:
+    render_section(
+        "FPL Predictions",
+        "Read-only FPL v3 player forecasts and the latest optimized squad.",
+    )
+
+    if fpl_predictions_df.empty and optimizer_row is None:
+        render_empty_state(
+            "No FPL predictions available",
+            "Run the FPL production prediction stage after the current bootstrap snapshot is available.",
+        )
+        _render_fpl_warnings(
+            fpl_predictions_df,
+            optimizer_row,
+            snapshot_df,
+            latest_ingestion,
+            freshness_df,
+            cold_start_teams,
+        )
+        return
+
+    target_season = _first_value(fpl_predictions_df, "target_season") or (
+        optimizer_row or {}
+    ).get("target_season")
+    target_gameweek = _first_value(fpl_predictions_df, "target_gameweek") or (
+        optimizer_row or {}
+    ).get("target_gameweek")
+    generated_at = None
+    if not fpl_predictions_df.empty and "created_at" in fpl_predictions_df:
+        generated_at = fpl_predictions_df["created_at"].max()
+    if generated_at is None and optimizer_row:
+        generated_at = optimizer_row.get("generated_at")
+
+    squad_records = _json_records((optimizer_row or {}).get("squad_json"))
+    starting_records = _json_records((optimizer_row or {}).get("starting_xi_json"))
+    squad_cost = (optimizer_row or {}).get("squad_cost")
+    budget_limit = (optimizer_row or {}).get("budget_limit")
+    budget_remaining = _subtract_if_numeric(budget_limit, squad_cost)
+    captain_name = _lookup_player_name(
+        (optimizer_row or {}).get("captain_player_id"),
+        fpl_predictions_df,
+        squad_records,
+    )
+    vice_captain_name = _lookup_player_name(
+        (optimizer_row or {}).get("vice_captain_player_id"),
+        fpl_predictions_df,
+        squad_records,
+    )
+
+    render_card_grid(
+        [
+            {
+                "label": "Target Season",
+                "value": target_season or "-",
+                "detail": "latest FPL prediction target",
+            },
+            {
+                "label": "Target Gameweek",
+                "value": target_gameweek or "-",
+                "detail": "latest FPL prediction target",
+            },
+            {
+                "label": "Prediction Rows",
+                "value": len(fpl_predictions_df),
+                "detail": "player forecasts returned",
+            },
+            {
+                "label": "Generated",
+                "value": _format_value(generated_at) if generated_at else "-",
+                "detail": "latest prediction generation time",
+            },
+            {
+                "label": "Optimized Squad Cost",
+                "value": squad_cost if squad_cost is not None else "-",
+                "detail": f"budget limit: {budget_limit}" if budget_limit is not None else "optimizer output unavailable",
+            },
+            {
+                "label": "Budget Remaining",
+                "value": budget_remaining if budget_remaining is not None else "-",
+                "detail": "budget units remaining",
+            },
+            {
+                "label": "Captain",
+                "value": captain_name,
+                "detail": "optimized captain",
+            },
+            {
+                "label": "Vice-captain",
+                "value": vice_captain_name,
+                "detail": "optimized vice-captain",
+            },
+        ]
+    )
+
+    _render_fpl_warnings(
+        fpl_predictions_df,
+        optimizer_row,
+        snapshot_df,
+        latest_ingestion,
+        freshness_df,
+        cold_start_teams,
+    )
+
+    if optimizer_row is None:
+        render_empty_state(
+            "No optimizer output available",
+            "Player predictions exist, but no optimized squad has been generated for the latest target.",
+        )
+    else:
+        render_section("Optimized Squad", "The latest read-only optimizer output.")
+        if starting_records:
+            st.subheader("Starting XI")
+            st.dataframe(
+                _squad_display_frame(starting_records, fpl_predictions_df),
+                use_container_width=True,
+                hide_index=True,
+            )
+        else:
+            render_empty_state("No starting XI available", "The optimizer output did not contain a starting XI.")
+
+        if squad_records:
+            st.subheader("Full 15-player squad")
+            st.dataframe(
+                _squad_display_frame(squad_records, fpl_predictions_df),
+                use_container_width=True,
+                hide_index=True,
+            )
+        else:
+            render_empty_state("No full squad available", "The optimizer output did not contain a squad list.")
+
+    render_section(
+        "Player Predictions",
+        "All current FPL player forecasts sorted by expected points descending.",
+    )
+    if fpl_predictions_df.empty:
+        render_empty_state("No player prediction rows", "No FPL player forecasts were returned for the latest target.")
+        return
+
+    display_df = fpl_predictions_df.copy()
+    display_df["position"] = display_df["position_id"].map(FPL_POSITION_NAMES).fillna("Unknown")
+    display_df["chance_of_playing_display"] = display_df["chance_of_playing"].apply(
+        lambda value: "Unknown" if pd.isna(value) else f"{int(value)}%"
+    )
+    display_df["cold_start_warning"] = display_df["team_name"].apply(
+        lambda team: "Cold-start team" if team in cold_start_teams else ""
+    )
+    display_df = display_df.sort_values(
+        ["expected_points", "player_name"],
+        ascending=[False, True],
+    )
+    display_df = display_df.rename(
+        columns={
+            "player_name": "Player Name",
+            "team_name": "Team",
+            "position": "Position",
+            "predicted_points": "Predicted Points",
+            "availability_factor": "Availability Factor",
+            "expected_points": "Expected Points",
+            "status": "Player Status",
+            "chance_of_playing_display": "Chance of Playing",
+            "cold_start_warning": "Cold-start Warning",
+        }
+    )
+    table_columns = [
+        "Player Name",
+        "Team",
+        "Position",
+        "Predicted Points",
+        "Availability Factor",
+        "Expected Points",
+        "Player Status",
+        "Chance of Playing",
+        "Cold-start Warning",
+    ]
+    st.dataframe(display_df[table_columns], use_container_width=True, hide_index=True)
+
+
+def _render_fpl_warnings(
+    fpl_predictions_df: pd.DataFrame,
+    optimizer_row: dict[str, Any] | None,
+    snapshot_df: pd.DataFrame,
+    latest_ingestion: dict[str, Any] | None,
+    freshness_df: pd.DataFrame,
+    cold_start_teams: list[str],
+) -> None:
+    if cold_start_teams:
+        render_alert("Cold-start teams were used: " + ", ".join(cold_start_teams) + ".")
+
+    ingestion_status = str((latest_ingestion or {}).get("run_status", "unknown")).lower()
+    if ingestion_status == "partial":
+        render_alert("The latest ingestion run is partial; some production sources did not complete.")
+
+    football_data_status = str((latest_ingestion or {}).get("football_data_status", "unknown")).lower()
+    if football_data_status in {"failed", "unavailable", "skipped"}:
+        render_alert("football-data ingestion is unavailable in the latest production run.")
+
+    understat_status = str((latest_ingestion or {}).get("understat_status", "unknown")).lower()
+    if understat_status in {"failed", "unavailable", "skipped"}:
+        render_alert("Understat data is unavailable in the latest production run.")
+
+    stale_sources = _freshness_warning_sources(freshness_df)
+    if stale_sources:
+        render_alert("Stale or unavailable data sources: " + ", ".join(stale_sources) + ".")
+
+    if not fpl_predictions_df.empty:
+        target_season = _first_value(fpl_predictions_df, "target_season")
+        target_gameweek = _first_value(fpl_predictions_df, "target_gameweek")
+        target_snapshots = snapshot_df.loc[
+            (snapshot_df.get("target_season") == target_season)
+            & (snapshot_df.get("gameweek") == target_gameweek)
+        ] if not snapshot_df.empty else pd.DataFrame()
+        if target_snapshots.empty:
+            render_alert(
+                "FPL predictions exist, but current gameweek results have not been scored; "
+                "gameweek snapshots are not available yet."
+            )
+
+
+def _squad_display_frame(records: list[dict[str, Any]], predictions_df: pd.DataFrame) -> pd.DataFrame:
+    prediction_lookup = {}
+    if not predictions_df.empty and "player_id" in predictions_df:
+        prediction_lookup = predictions_df.set_index("player_id").to_dict(orient="index")
+
+    rows = []
+    for record in records:
+        if not isinstance(record, dict):
+            continue
+        player_id = _safe_int(record.get("player_id"))
+        prediction = prediction_lookup.get(player_id, {})
+        rows.append(
+            {
+                "Player Name": record.get("player_name") or prediction.get("player_name") or "Unavailable",
+                "Team": record.get("team_name") or prediction.get("team_name") or "Unavailable",
+                "Position": record.get("position") or FPL_POSITION_NAMES.get(
+                    _safe_int(record.get("position_id") or prediction.get("position_id")),
+                    "Unknown",
+                ),
+                "Expected Points": _numeric_display(
+                    record.get("expected_points", prediction.get("expected_points"))
+                ),
+                "Cost": record.get("now_cost", "-") or "-",
+            }
+        )
+    return pd.DataFrame(rows, columns=["Player Name", "Team", "Position", "Expected Points", "Cost"])
+
+
+def _json_records(value: Any) -> list[dict[str, Any]]:
+    if value is None:
+        return []
+    if isinstance(value, str):
+        try:
+            value = json.loads(value)
+        except Exception:
+            return []
+    if not isinstance(value, list):
+        return []
+    return [record for record in value if isinstance(record, dict)]
+
+
+def _lookup_player_name(player_id: Any, predictions_df: pd.DataFrame, squad_records: list[dict[str, Any]]) -> str:
+    normalized_id = _safe_int(player_id)
+    if normalized_id is None:
+        return "Unavailable"
+    if not predictions_df.empty:
+        matches = predictions_df.loc[predictions_df["player_id"] == normalized_id, "player_name"]
+        if not matches.empty:
+            return str(matches.iloc[0])
+    for record in squad_records:
+        if _safe_int(record.get("player_id")) == normalized_id:
+            return str(record.get("player_name") or f"Player {normalized_id}")
+    return f"Player {normalized_id}"
+
+
+def _first_value(frame: pd.DataFrame, column: str) -> Any:
+    if frame.empty or column not in frame:
+        return None
+    value = frame.iloc[0][column]
+    return None if pd.isna(value) else value
+
+
+def _safe_int(value: Any) -> int | None:
+    if value is None or pd.isna(value):
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _numeric_display(value: Any) -> Any:
+    if value is None or pd.isna(value):
+        return "-"
+    try:
+        return round(float(value), 2)
+    except (TypeError, ValueError):
+        return value
+
+
+def _subtract_if_numeric(left: Any, right: Any) -> Any:
+    left_value = _numeric_value(left)
+    right_value = _numeric_value(right)
+    if left_value is None or right_value is None:
+        return None
+    result = left_value - right_value
+    return int(result) if result.is_integer() else round(result, 2)
+
+
+def _numeric_value(value: Any) -> float | None:
+    if value is None or pd.isna(value):
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def render_model_health(health_df) -> None:
@@ -969,13 +1717,26 @@ def _table_exists(db_conn, table_name: str) -> bool:
 
 
 def _freshness_has_warning(freshness_df: pd.DataFrame) -> bool:
+    return bool(_freshness_warning_sources(freshness_df))
+
+
+def _freshness_warning_sources(freshness_df: pd.DataFrame) -> list[str]:
     if freshness_df.empty:
-        return True
-    if "latest_error_message" in freshness_df and freshness_df["latest_error_message"].notna().any():
-        return True
-    if "last_successful_update_at" in freshness_df and freshness_df["last_successful_update_at"].isna().any():
-        return True
-    return False
+        return ["freshness unavailable"]
+
+    warnings: list[str] = []
+    now = pd.Timestamp.now(tz="UTC")
+    for row in freshness_df.to_dict(orient="records"):
+        source_name = str(row.get("source_name") or "unknown source")
+        error_message = row.get("latest_error_message")
+        if error_message is not None and not pd.isna(error_message) and str(error_message).strip():
+            warnings.append(source_name)
+            continue
+
+        timestamp = pd.to_datetime(row.get("last_successful_update_at"), errors="coerce", utc=True)
+        if pd.isna(timestamp) or now - timestamp > pd.Timedelta(hours=48):
+            warnings.append(source_name)
+    return sorted(set(warnings))
 
 
 def _source_status(latest_ingestion: dict | None, keys: list[str]) -> str:

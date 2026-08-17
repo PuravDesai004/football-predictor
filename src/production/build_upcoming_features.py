@@ -21,6 +21,7 @@ ELO_CURRENT_TABLE = "elo_current_v3"
 OUTPUT_TABLE = "production_upcoming_match_features_v3"
 TEAM_MAPPING_TABLE = "production_team_name_mapping"
 HOME_ADVANTAGE = 50.0
+PROMOTED_ELO = 1400.0
 
 SRC_DIR = PROJECT_ROOT / "src"
 if str(SRC_DIR) not in sys.path:
@@ -324,26 +325,27 @@ def seed_or_validate_team_mapping(conn, snapshot_metadata) -> None:
         )
 
     records = []
-    unresolved: list[str] = []
+    cold_start_teams: list[str] = []
     for row in team_rows:
         fpl_team_name = str(row["fpl_team_name"]).strip()
         model_team_name = _resolve_model_team_name(fpl_team_name, model_teams)
         if model_team_name is None:
-            unresolved.append(fpl_team_name)
-            continue
+            model_team_name = fpl_team_name
+            cold_start_teams.append(fpl_team_name)
+            source = f"fpl_bootstrap_run_{bootstrap_run_id}:new_team_cold_start"
+            print(
+                "WARNING: new FPL team has no historical model-team match; "
+                f"using exact-name cold-start mapping for {fpl_team_name}"
+            )
+        else:
+            source = f"fpl_bootstrap_run_{bootstrap_run_id}"
         records.append(
             {
                 "fpl_team_id": int(row["fpl_team_id"]),
                 "fpl_team_name": fpl_team_name,
                 "model_team_name": model_team_name,
-                "source": f"fpl_bootstrap_run_{bootstrap_run_id}",
+                "source": source,
             }
-        )
-
-    if unresolved:
-        raise RuntimeError(
-            "Could not resolve FPL team name(s) to model team names: "
-            + ", ".join(sorted(unresolved))
         )
 
     query = text(
@@ -379,6 +381,12 @@ def seed_or_validate_team_mapping(conn, snapshot_metadata) -> None:
         raise RuntimeError(f"Team mapping write failed for: {missing_model_teams}")
 
     print(f"PASS: seeded/validated {len(records)} active FPL team mappings.")
+    if cold_start_teams:
+        print("New teams reported as cold-start teams:")
+        for team_name in sorted(cold_start_teams):
+            print(f"- {team_name}")
+    else:
+        print("New teams reported as cold-start teams: none")
     for record in records:
         print(
             f"- {record['fpl_team_id']}: "
@@ -545,9 +553,20 @@ def build_feature_rows(
     missing_state = sorted(team for team in fixture_teams if team not in state_by_team.index)
     _print_missing_team_summary(missing_elo, missing_state)
     if missing_elo:
-        raise RuntimeError("Teams missing current Elo: " + ", ".join(missing_elo))
+        print(f"WARNING: using in-memory promoted-team Elo fallback {PROMOTED_ELO:.1f} for:")
+        for team_name in missing_elo:
+            print(f"- {team_name}")
+            elo_by_team.loc[team_name, "elo_rating"] = PROMOTED_ELO
     if missing_state:
-        raise RuntimeError("Teams missing latest rolling feature state: " + ", ".join(missing_state))
+        print("WARNING: using in-memory zero rolling-state cold start for:")
+        cold_start_state = {
+            column: 0.0
+            for column in TEAM_STATE_COLUMNS
+            if column != "team_name"
+        }
+        for team_name in missing_state:
+            print(f"- {team_name}")
+            state_by_team.loc[team_name] = cold_start_state
 
     generated_at = datetime.now(timezone.utc).replace(tzinfo=None)
     rows: list[dict[str, Any]] = []
