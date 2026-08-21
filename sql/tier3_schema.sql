@@ -798,3 +798,335 @@ CREATE TABLE IF NOT EXISTS production_upcoming_match_features_v3 (
     CHECK (target_gameweek IS NULL OR target_gameweek > 0),
     CHECK (home_team <> away_team)
 );
+
+CREATE TABLE IF NOT EXISTS fpl_player_gameweek_history_v3 (
+    id SERIAL PRIMARY KEY,
+    source TEXT NOT NULL DEFAULT 'vaastav',
+    season TEXT NOT NULL,
+    gameweek INTEGER NOT NULL,
+    player_source_id TEXT NULL,
+    player_name TEXT NOT NULL,
+    player_slug TEXT NULL,
+    team_name TEXT NULL,
+    opponent_team_name TEXT NULL,
+    fixture_id TEXT NULL,
+    kickoff_time TIMESTAMP NULL,
+    was_home BOOLEAN NULL,
+    position TEXT NULL,
+    minutes INTEGER NULL,
+    total_points INTEGER NULL,
+    goals_scored INTEGER NULL,
+    assists INTEGER NULL,
+    clean_sheets INTEGER NULL,
+    goals_conceded INTEGER NULL,
+    own_goals INTEGER NULL,
+    penalties_saved INTEGER NULL,
+    penalties_missed INTEGER NULL,
+    yellow_cards INTEGER NULL,
+    red_cards INTEGER NULL,
+    saves INTEGER NULL,
+    bonus INTEGER NULL,
+    bps INTEGER NULL,
+    influence FLOAT NULL,
+    creativity FLOAT NULL,
+    threat FLOAT NULL,
+    ict_index FLOAT NULL,
+    starts INTEGER NULL,
+    expected_goals FLOAT NULL,
+    expected_assists FLOAT NULL,
+    expected_goal_involvements FLOAT NULL,
+    expected_goals_conceded FLOAT NULL,
+    transfers_in INTEGER NULL,
+    transfers_out INTEGER NULL,
+    selected INTEGER NULL,
+    value FLOAT NULL,
+    raw_player_key TEXT NULL,
+    source_file TEXT NOT NULL,
+    loaded_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CHECK (gameweek > 0),
+    CHECK (TRIM(player_name) <> ''),
+    CHECK (TRIM(source_file) <> '')
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_fpl_pgh_v3_unique_fixture_player_id
+ON fpl_player_gameweek_history_v3 (
+    season,
+    gameweek,
+    player_source_id,
+    fixture_id,
+    source_file
+)
+WHERE fixture_id IS NOT NULL AND player_source_id IS NOT NULL;
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_fpl_pgh_v3_unique_fixture_name
+ON fpl_player_gameweek_history_v3 (
+    season,
+    gameweek,
+    player_name,
+    fixture_id,
+    source_file
+)
+WHERE fixture_id IS NOT NULL AND player_source_id IS NULL;
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_fpl_pgh_v3_unique_no_fixture_player_id
+ON fpl_player_gameweek_history_v3 (
+    season,
+    gameweek,
+    player_source_id,
+    source_file
+)
+WHERE fixture_id IS NULL AND player_source_id IS NOT NULL;
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_fpl_pgh_v3_unique_no_fixture_name
+ON fpl_player_gameweek_history_v3 (
+    season,
+    gameweek,
+    player_name,
+    source_file
+)
+WHERE fixture_id IS NULL AND player_source_id IS NULL;
+
+CREATE INDEX IF NOT EXISTS idx_fpl_pgh_v3_season
+ON fpl_player_gameweek_history_v3 (season);
+
+CREATE INDEX IF NOT EXISTS idx_fpl_pgh_v3_gameweek
+ON fpl_player_gameweek_history_v3 (gameweek);
+
+CREATE INDEX IF NOT EXISTS idx_fpl_pgh_v3_player_name
+ON fpl_player_gameweek_history_v3 (player_name);
+
+CREATE INDEX IF NOT EXISTS idx_fpl_pgh_v3_team_name
+ON fpl_player_gameweek_history_v3 (team_name);
+
+CREATE INDEX IF NOT EXISTS idx_fpl_pgh_v3_position
+ON fpl_player_gameweek_history_v3 (position);
+
+CREATE TABLE IF NOT EXISTS fpl_player_features_v3 (
+    feature_id BIGSERIAL PRIMARY KEY,
+    canonical_player_key TEXT NOT NULL,
+    fpl_code INTEGER NOT NULL,
+    season TEXT NOT NULL,
+    gameweek INTEGER NOT NULL,
+    player_name TEXT NOT NULL,
+    player_source_id TEXT NOT NULL,
+    target_total_points INTEGER NULL,
+    prior_points_last1 FLOAT NULL,
+    prior_points_last3 FLOAT NULL,
+    prior_points_last5 FLOAT NULL,
+    prior_points_last10 FLOAT NULL,
+    prior_points_season FLOAT NULL,
+    prior_minutes_last3 FLOAT NULL,
+    prior_minutes_last5 FLOAT NULL,
+    prior_minutes_last10 FLOAT NULL,
+    prior_appearances_last5 FLOAT NULL,
+    prior_starts_last5 FLOAT NULL,
+    prior_goals_last5 FLOAT NULL,
+    prior_assists_last5 FLOAT NULL,
+    prior_bonus_last5 FLOAT NULL,
+    prior_clean_sheets_last5 FLOAT NULL,
+    prior_saves_last5 FLOAT NULL,
+    prior_xg_last5 FLOAT NULL,
+    prior_xa_last5 FLOAT NULL,
+    prior_points_per_90 FLOAT NULL,
+    prior_minutes_total FLOAT NULL,
+    prior_gameweeks_played FLOAT NULL,
+    feature_history_start_season TEXT NULL,
+    feature_history_start_gameweek INTEGER NULL,
+    feature_history_end_season TEXT NULL,
+    feature_history_end_gameweek INTEGER NULL,
+    prior_history_row_count INTEGER NOT NULL DEFAULT 0,
+    source_history_row_id INTEGER NOT NULL REFERENCES fpl_player_gameweek_history_v3(id),
+    source_history_row_count INTEGER NOT NULL DEFAULT 1,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (canonical_player_key, season, gameweek),
+    CHECK (gameweek > 0),
+    CHECK (feature_history_start_gameweek IS NULL OR feature_history_start_gameweek > 0),
+    CHECK (feature_history_end_gameweek IS NULL OR feature_history_end_gameweek > 0),
+    CHECK (prior_history_row_count >= 0),
+    CHECK (source_history_row_count > 0),
+    CHECK (TRIM(canonical_player_key) <> ''),
+    CHECK (TRIM(season) <> ''),
+    CHECK (TRIM(player_name) <> ''),
+    CHECK (TRIM(player_source_id) <> '')
+);
+
+CREATE INDEX IF NOT EXISTS idx_fpl_player_features_v3_season_gw
+ON fpl_player_features_v3 (season, gameweek);
+
+CREATE INDEX IF NOT EXISTS idx_fpl_player_features_v3_player_key
+ON fpl_player_features_v3 (canonical_player_key);
+
+CREATE INDEX IF NOT EXISTS idx_fpl_player_features_v3_fpl_code
+ON fpl_player_features_v3 (fpl_code);
+
+CREATE INDEX IF NOT EXISTS idx_fpl_player_features_v3_source_history
+ON fpl_player_features_v3 (source_history_row_id);
+
+CREATE TABLE IF NOT EXISTS fpl_model_training_runs_v3 (
+    training_run_id BIGSERIAL PRIMARY KEY,
+    run_started_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    run_finished_at TIMESTAMP NULL,
+    run_status TEXT NOT NULL,
+    model_name TEXT NOT NULL,
+    train_seasons TEXT[] NULL,
+    validation_season TEXT NULL,
+    final_holdout_season TEXT NULL,
+    feature_table TEXT NULL,
+    row_count INTEGER NOT NULL DEFAULT 0,
+    metrics_json JSONB NULL,
+    notes TEXT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CHECK (run_status IN ('started', 'success', 'failed', 'skipped')),
+    CHECK (row_count >= 0)
+);
+
+CREATE TABLE IF NOT EXISTS fpl_player_predictions_v3 (
+    prediction_id BIGSERIAL PRIMARY KEY,
+    target_season TEXT NOT NULL,
+    target_gameweek INTEGER NOT NULL,
+    player_id INTEGER NOT NULL,
+    fpl_code INTEGER NULL,
+    player_name TEXT NOT NULL,
+    team_id INTEGER NOT NULL,
+    team_name TEXT NULL,
+    position_id INTEGER NOT NULL,
+    now_cost INTEGER NOT NULL,
+    predicted_points FLOAT NOT NULL,
+    availability_factor FLOAT NOT NULL,
+    expected_points FLOAT NOT NULL,
+    status TEXT NOT NULL,
+    chance_of_playing INTEGER NULL,
+    source_feature_season TEXT NULL,
+    source_feature_gameweek INTEGER NULL,
+    source_bootstrap_run_id INTEGER NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (target_season, target_gameweek, player_id),
+    CHECK (target_gameweek > 0),
+    CHECK (position_id IN (1, 2, 3, 4)),
+    CHECK (now_cost >= 0),
+    CHECK (availability_factor >= 0 AND availability_factor <= 1),
+    CHECK (expected_points >= 0)
+);
+
+CREATE INDEX IF NOT EXISTS idx_fpl_predictions_v3_target
+ON fpl_player_predictions_v3 (target_season, target_gameweek);
+
+CREATE TABLE IF NOT EXISTS fpl_optimizer_outputs_v3 (
+    optimizer_output_id BIGSERIAL PRIMARY KEY,
+    target_season TEXT NOT NULL,
+    target_gameweek INTEGER NOT NULL,
+    generated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    budget_limit INTEGER NOT NULL,
+    squad_cost INTEGER NOT NULL,
+    squad_json JSONB NOT NULL,
+    starting_xi_json JSONB NOT NULL,
+    captain_player_id INTEGER NOT NULL,
+    vice_captain_player_id INTEGER NOT NULL,
+    objective_value FLOAT NOT NULL,
+    source_prediction_count INTEGER NOT NULL,
+    UNIQUE (target_season, target_gameweek),
+    CHECK (target_gameweek > 0),
+    CHECK (budget_limit >= 0),
+    CHECK (squad_cost >= 0),
+    CHECK (source_prediction_count > 0)
+);
+
+CREATE INDEX IF NOT EXISTS idx_fpl_optimizer_outputs_v3_target
+ON fpl_optimizer_outputs_v3 (target_season, target_gameweek);
+
+CREATE TABLE IF NOT EXISTS production_fpl_gameweek_snapshots_v3 (
+    snapshot_id BIGSERIAL PRIMARY KEY,
+    ingestion_run_id INTEGER NULL REFERENCES production_ingestion_runs(run_id),
+    target_season TEXT NOT NULL,
+    gameweek INTEGER NOT NULL,
+    snapshot_time TIMESTAMP NOT NULL,
+    player_id INTEGER NOT NULL,
+    fpl_code INTEGER NULL,
+    player_name TEXT NOT NULL,
+    team_id INTEGER NULL,
+    position_id INTEGER NULL,
+    minutes INTEGER NOT NULL DEFAULT 0,
+    total_points INTEGER NOT NULL DEFAULT 0,
+    goals_scored INTEGER NOT NULL DEFAULT 0,
+    assists INTEGER NOT NULL DEFAULT 0,
+    clean_sheets INTEGER NOT NULL DEFAULT 0,
+    saves INTEGER NOT NULL DEFAULT 0,
+    bonus INTEGER NOT NULL DEFAULT 0,
+    starts INTEGER NOT NULL DEFAULT 0,
+    expected_goals FLOAT NULL,
+    expected_assists FLOAT NULL,
+    expected_goal_involvements FLOAT NULL,
+    expected_goals_conceded FLOAT NULL,
+    identity_status TEXT NOT NULL,
+    raw_stats_json JSONB NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (target_season, gameweek, player_id),
+    CHECK (gameweek > 0),
+    CHECK (minutes >= 0),
+    CHECK (identity_status IN ('matched', 'unmatched'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_production_fpl_gameweek_v3_target
+ON production_fpl_gameweek_snapshots_v3 (target_season, gameweek);
+
+CREATE INDEX IF NOT EXISTS idx_production_fpl_gameweek_v3_fpl_code
+ON production_fpl_gameweek_snapshots_v3 (fpl_code);
+
+-- Phase 1D: FPL player identity map (expanded schema).
+-- Maps each season's FPL element ID (season-local) to the globally stable
+-- fpl_code obtained exclusively from players_raw.csv via exact join on
+--   (season, player_source_id) = (season, id in players_raw.csv).
+-- fpl_code is the canonical cross-season identity key ONLY when
+-- mapping_method = 'element_id_exact'.
+-- Unmatched rows have fpl_code NULL and needs_manual_review = TRUE.
+
+CREATE TABLE IF NOT EXISTS fpl_player_identity_map_v3 (
+    identity_id BIGSERIAL PRIMARY KEY,
+    canonical_player_key TEXT NULL,
+    fpl_code INTEGER NULL,
+    season TEXT NOT NULL,
+    player_source_id TEXT NOT NULL,
+    player_name TEXT NOT NULL,
+    normalized_player_name TEXT NOT NULL,
+    team_name TEXT NULL,
+    position TEXT NULL,
+    first_gameweek INTEGER NULL,
+    last_gameweek INTEGER NULL,
+    row_count INTEGER NOT NULL DEFAULT 0,
+    minutes_total INTEGER NULL,
+    total_points_sum INTEGER NULL,
+    history_rows_matched INTEGER NOT NULL DEFAULT 0,
+    mapping_method TEXT NOT NULL,
+    confidence_score FLOAT NOT NULL DEFAULT 0.0,
+    needs_manual_review BOOLEAN NOT NULL DEFAULT FALSE,
+    review_reason TEXT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (season, player_source_id),
+    CHECK (confidence_score >= 0 AND confidence_score <= 1),
+    CHECK (mapping_method IN ('element_id_exact', 'unmatched')),
+    CHECK (row_count >= 0),
+    CHECK (history_rows_matched >= 0),
+    CHECK (TRIM(season) <> ''),
+    CHECK (TRIM(player_source_id) <> ''),
+    CHECK (TRIM(player_name) <> ''),
+    CHECK (TRIM(normalized_player_name) <> '')
+);
+
+CREATE INDEX IF NOT EXISTS idx_fpl_identity_map_v3_fpl_code
+ON fpl_player_identity_map_v3 (fpl_code)
+WHERE fpl_code IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_fpl_identity_map_v3_season
+ON fpl_player_identity_map_v3 (season);
+
+CREATE INDEX IF NOT EXISTS idx_fpl_identity_map_v3_needs_review
+ON fpl_player_identity_map_v3 (needs_manual_review)
+WHERE needs_manual_review = TRUE;
+
+CREATE INDEX IF NOT EXISTS idx_fpl_identity_map_v3_canonical_key
+ON fpl_player_identity_map_v3 (canonical_player_key)
+WHERE canonical_player_key IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_fpl_identity_map_v3_season_player
+ON fpl_player_identity_map_v3 (season, player_source_id);

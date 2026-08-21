@@ -236,9 +236,7 @@ def load_clusters_to_postgres(clustered_df, engine):
         ] + STYLE_FEATURES
 
         create_table_sql = """
-            DROP TABLE IF EXISTS team_style_clusters;
-
-            CREATE TABLE team_style_clusters (
+            CREATE TABLE IF NOT EXISTS team_style_clusters (
                 fixture_id INT,
                 gameweek INT,
                 match_date DATE,
@@ -265,13 +263,13 @@ def load_clusters_to_postgres(clustered_df, engine):
 
         with engine.begin() as conn:
             conn.execute(text(create_table_sql))
-
-        clustered_df[columns_to_store].to_sql(
-            "team_style_clusters",
-            engine,
-            if_exists="append",
-            index=False,
-        )
+            conn.execute(text("TRUNCATE TABLE team_style_clusters RESTART IDENTITY"))
+            clustered_df[columns_to_store].to_sql(
+                "team_style_clusters",
+                conn,
+                if_exists="append",
+                index=False,
+            )
 
         print(f"Loaded {len(clustered_df)} rows into team_style_clusters")
     except Exception as error:

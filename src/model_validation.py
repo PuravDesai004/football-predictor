@@ -10,8 +10,9 @@ def sort_by_time(df):
     if missing_columns:
         raise ValueError(f"Missing required time columns: {missing_columns}")
 
-    sorted_df = df.sort_values(["gameweek", "fixture_id"]).reset_index(drop=True)
-    print("Data sorted by: gameweek, fixture_id")
+    sort_columns = (["season"] if "season" in df.columns else []) + ["gameweek", "fixture_id"]
+    sorted_df = df.sort_values(sort_columns).reset_index(drop=True)
+    print(f"Data sorted by: {', '.join(sort_columns)}")
     return sorted_df
 
 
@@ -20,28 +21,36 @@ def make_gameweek_split(df, train_fraction=0.8):
     if "gameweek" not in df.columns:
         raise ValueError("Missing required column: gameweek")
 
-    unique_gameweeks = sorted(df["gameweek"].dropna().unique())
-    split_index = int(len(unique_gameweeks) * train_fraction)
+    period_columns = (["season"] if "season" in df.columns else []) + ["gameweek"]
+    periods = (
+        df[period_columns]
+        .dropna()
+        .drop_duplicates()
+        .sort_values(period_columns)
+        .reset_index(drop=True)
+    )
+    split_index = int(len(periods) * train_fraction)
 
-    if split_index <= 0 or split_index >= len(unique_gameweeks):
-        raise ValueError("Not enough gameweeks to create a time-safe split.")
+    if split_index <= 0 or split_index >= len(periods):
+        raise ValueError("Not enough chronological periods to create a time-safe split.")
 
-    train_gameweeks = unique_gameweeks[:split_index]
-    test_gameweeks = unique_gameweeks[split_index:]
-    overlap = sorted(set(train_gameweeks).intersection(set(test_gameweeks)))
+    train_periods = set(map(tuple, periods.iloc[:split_index].to_numpy()))
+    test_periods = set(map(tuple, periods.iloc[split_index:].to_numpy()))
+    overlap = sorted(train_periods.intersection(test_periods))
 
     if overlap:
         raise ValueError(f"Gameweek overlap found: {overlap}")
 
-    train_df = df[df["gameweek"].isin(train_gameweeks)].reset_index(drop=True)
-    test_df = df[df["gameweek"].isin(test_gameweeks)].reset_index(drop=True)
+    row_periods = list(map(tuple, df[period_columns].to_numpy()))
+    train_df = df.loc[[period in train_periods for period in row_periods]].reset_index(drop=True)
+    test_df = df.loc[[period in test_periods for period in row_periods]].reset_index(drop=True)
 
     print("=== Time-safe split check ===")
     print(f"Training rows: {len(train_df)}")
-    print(f"Train gameweeks: GW{int(min(train_gameweeks))} to GW{int(max(train_gameweeks))}")
+    print(f"Train periods: {periods.iloc[0].to_dict()} to {periods.iloc[split_index - 1].to_dict()}")
     print(f"Testing rows: {len(test_df)}")
-    print(f"Test gameweeks: GW{int(min(test_gameweeks))} to GW{int(max(test_gameweeks))}")
-    print("Gameweek overlap: none")
+    print(f"Test periods: {periods.iloc[split_index].to_dict()} to {periods.iloc[-1].to_dict()}")
+    print(f"Chronological period overlap: {'none' if not overlap else overlap}")
 
     return train_df, test_df
 

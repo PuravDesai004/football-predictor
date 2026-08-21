@@ -13,6 +13,8 @@ data/raw/
 data/processed/
 data/historical/*.csv
 !data/historical/.gitkeep
+data/vaastav_fpl_history/
+data/production_artifacts/
 models/saved/*.pkl
 models/saved/*.json
 !models/saved/xgb_classifier.pkl

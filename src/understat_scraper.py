@@ -308,8 +308,7 @@ def load_to_postgres(df, engine):
     with engine.begin() as conn:
         conn.execute(text(create_table_sql))
         conn.execute(text("TRUNCATE TABLE understat_xg RESTART IDENTITY"))
-
-    df.to_sql("understat_xg", engine, if_exists="append", index=False)
+        df.to_sql("understat_xg", conn, if_exists="append", index=False)
 
     with engine.connect() as conn:
         n = conn.execute(text("SELECT COUNT(*) FROM understat_xg")).scalar()
@@ -322,9 +321,7 @@ def load_team_history_to_postgres(df, engine):
     warn_unmapped_team_history_against_teams(df, engine)
 
     create_table_sql = """
-        DROP TABLE IF EXISTS understat_team_history;
-
-        CREATE TABLE understat_team_history (
+        CREATE TABLE IF NOT EXISTS understat_team_history (
             id SERIAL PRIMARY KEY,
             season INT,
             understat_team_id INT,
@@ -353,8 +350,8 @@ def load_team_history_to_postgres(df, engine):
 
     with engine.begin() as conn:
         conn.execute(text(create_table_sql))
-
-    df.to_sql("understat_team_history", engine, if_exists="append", index=False)
+        conn.execute(text("TRUNCATE TABLE understat_team_history RESTART IDENTITY"))
+        df.to_sql("understat_team_history", conn, if_exists="append", index=False)
 
     with engine.connect() as conn:
         n = conn.execute(text("SELECT COUNT(*) FROM understat_team_history")).scalar()

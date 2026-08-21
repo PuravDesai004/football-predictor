@@ -247,10 +247,7 @@ def load_player_gameweek_history(df, engine):
     with engine.begin() as conn:
         conn.execute(text(create_table_sql))
         conn.execute(text("TRUNCATE TABLE player_gameweek_history RESTART IDENTITY;"))
-
-    df.to_sql("player_gameweek_history", engine, if_exists="append", index=False)
-
-    with engine.begin() as conn:
+        df.to_sql("player_gameweek_history", conn, if_exists="append", index=False)
         for statement in index_sql:
             conn.execute(text(statement))
 

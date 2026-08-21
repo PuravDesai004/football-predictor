@@ -1,8 +1,8 @@
 pandas
 numpy
 requests
-scikit-learn
-xgboost
+scikit-learn==1.8.0
+xgboost==3.4.1
 pulp
 streamlit
 sqlalchemy

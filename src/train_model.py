@@ -168,7 +168,13 @@ def train_classifier_variant(train_df, test_df, feature_cols, label):
         x_test = test_df[feature_cols].copy()
 
         label_encoder = LabelEncoder()
-        label_encoder.fit(pd.concat([train_df["result"], test_df["result"]]))
+        label_encoder.fit(train_df["result"])
+        unseen_test_labels = sorted(set(test_df["result"]) - set(label_encoder.classes_))
+        if unseen_test_labels:
+            raise ValueError(
+                "Test set contains labels absent from training set: "
+                f"{unseen_test_labels}"
+            )
         y_train = pd.Series(label_encoder.transform(train_df["result"]))
         y_test = pd.Series(label_encoder.transform(test_df["result"]))
 
