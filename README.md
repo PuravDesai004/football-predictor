@@ -199,6 +199,17 @@ DB_USER=your_username
 DB_PASS=your_password
 ```
 
+## Tests in a fresh clone
+
+Install `pytest` in the project environment to run the tests. The standalone split test passed in the audit:
+
+```bash
+python -m pip install pytest
+python -m pytest -q tests/test_model_validation.py
+```
+
+Two checks in `tests/test_model_health.py` require ignored local production metadata. They fail in a fresh clone until the real artifacts exist: `data/production_artifacts/fpl_points_v3_candidate_metadata.json` and `models/saved/production_features_v3.json`. The corresponding training scripts are `src/production/train_fpl_model_v3.py` and `src/production/train_production_model.py`; their data and database prerequisites were not rerun in this audit. Do not substitute invented production results.
+
 ## Validation Commands
 
 ```bash
